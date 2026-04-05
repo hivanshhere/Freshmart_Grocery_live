@@ -33,7 +33,22 @@ text-decoration:none;
 font-weight:bold;
 }
 
+nav .nav-btn{
+margin-left:18px;
+padding:0;
+border:none;
+background:transparent;
+color:white;
+font:inherit;
+font-weight:bold;
+cursor:pointer;
+}
+
 nav a:hover{
+opacity:0.85;
+}
+
+nav .nav-btn:hover{
 opacity:0.85;
 }
 
@@ -145,6 +160,10 @@ color:white;
 	}
 
 	nav a{
+		margin-left:14px;
+	}
+
+	nav .nav-btn{
 		margin-left:14px;
 	}
 
