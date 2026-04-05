@@ -195,7 +195,12 @@ async function loadAddresses() {
 
         if (!Array.isArray(data) || data.length === 0) {
             addressListEl.innerHTML = "<div class='help-text'>No saved addresses yet. Add one below.</div>";
+            localStorage.removeItem("selectedAddressId");
             return;
+        }
+
+        if (!localStorage.getItem("selectedAddressId") && data[0]?.id) {
+            localStorage.setItem("selectedAddressId", String(data[0].id));
         }
 
         addressListEl.innerHTML = "";
@@ -262,6 +267,10 @@ async function saveAddress() {
         }
 
         setMsg(data?.message || (isEdit ? "Address updated" : "Address saved"));
+        const selectedId = isEdit ? editingAddressId : data?.address?.id;
+        if (Number.isFinite(Number(selectedId))) {
+            localStorage.setItem("selectedAddressId", String(selectedId));
+        }
         resetAddressForm();
         await loadAddresses();
     } catch {
