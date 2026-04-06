@@ -53,7 +53,8 @@ function normalizeStoreItems(storeData) {
                 price: it.price,
                 qty: Number(it.qty) || 0,
                 quantity: it.quantity || 1,
-                unit: String(it.unit || "").trim()
+                unit: String(it.unit || "").trim(),
+                image: String(it.image || "").trim()
             }
         }).filter(it => it.qty > 0)
     }
@@ -76,6 +77,10 @@ function getStoreDisplayName(storeCart, storeData) {
     const fromServer = storeData && storeData.store_name ? String(storeData.store_name) : ""
     const fromLocal = localStorage.getItem("storeName") || ""
     return fromCart || fromServer || fromLocal || "Store"
+}
+
+function buildImageUrl(image) {
+    return image ? `http://localhost:3000/uploads/${image}` : ""
 }
 
 async function loadAddresses() {
@@ -265,6 +270,7 @@ async function renderCart() {
             const left = document.createElement("div")
             left.className = "cart-item-left"
             left.innerHTML = `
+                ${item.image ? `<img src="${buildImageUrl(item.image)}" class="cart-item-image" alt="${item.name}">` : ""}
                 <div class="cart-item-name">${item.name}</div>
                 <div class="cart-item-meta">${item.price}</div>
             `

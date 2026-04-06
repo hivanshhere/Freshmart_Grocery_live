@@ -72,6 +72,10 @@ function setMsgError(text) {
     if (text) alert(text);
 }
 
+function buildImageUrl(image) {
+    return image ? `http://localhost:3000/uploads/${image}` : "";
+}
+
 function authHeaders() {
     return {
         "Content-Type": "application/json",
@@ -276,10 +280,12 @@ function renderProducts(products) {
         const priceNum = Number(p.price);
         const priceText = Number.isFinite(priceNum) ? priceNum.toFixed(2) : String(p.price ?? "");
         const unitText = unit ? ` / ${quantity} ${unit}` : ` / ${quantity}`;
+        const imageUrl = buildImageUrl(p.image);
 
         const div = document.createElement("div");
         div.className = "store-card";
         div.innerHTML = `
+            ${imageUrl ? `<img src="${imageUrl}" class="product-img" alt="${p.name}">` : ""}
             <h3>${p.name}</h3>
             ${description ? `<p class="product-description">${description}</p>` : ""}
             <p>Price: ₹${priceText}${unitText}</p>
@@ -333,7 +339,14 @@ try {
     // ignore
 }
 
-async function addProduct() {
+const productFormEl = document.getElementById("productForm");
+if (productFormEl) {
+    productFormEl.addEventListener("submit", addProduct);
+}
+
+async function addProduct(e) {
+    if (e) e.preventDefault();
+
     if (!currentStore) {
         setMsg("Create your store first");
         return;
@@ -343,63 +356,59 @@ async function addProduct() {
 
     const name = document.getElementById("pname").value.trim();
     const description = document.getElementById("pdescription").value.trim();
-    const priceRaw = document.getElementById("pprice").value;
-    const quantityRaw = document.getElementById("pquantity").value;
+    const price = Number(document.getElementById("pprice").value);
+    const quantity = Number(document.getElementById("pquantity").value);
     const unit = document.getElementById("punit").value;
+    const imageFile = document.getElementById("pimage").files[0];
 
-    const price = Number(priceRaw);
-    const quantity = Number(quantityRaw);
     const allowedUnits = ["kg", "g", "litre", "ml", "piece", "pack"];
 
-    if (!name) {
-        setAddProductError("name", "Enter product name");
-        return;
-    }
+    if (!name) return setAddProductError("name", "Enter product name");
+    if (name.length < 2) return setAddProductError("name", "Min 2 letters");
 
-    if (name.length < 2) {
-        setAddProductError("name", "Product name should be at least 2 letters");
-        return;
-    }
+    if (!description) return setAddProductError("description", "Enter description");
+    if (description.length < 5) return setAddProductError("description", "Min 5 chars");
 
-    if (!description) {
-        setAddProductError("description", "Enter product description");
-        return;
-    }
+    if (!price || price <= 0) return setAddProductError("price", "Invalid price");
+    if (!quantity || quantity <= 0) return setAddProductError("quantity", "Invalid quantity");
 
-    if (description.length < 5) {
-        setAddProductError("description", "Description should be at least 5 characters");
-        return;
-    }
-
-    if (!Number.isFinite(price) || price <= 0) {
-        setAddProductError("price", "Enter a valid price greater than 0");
-        return;
-    }
-
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-        setAddProductError("quantity", "Enter a valid quantity greater than 0");
-        return;
-    }
-
-    if (!unit || !allowedUnits.includes(unit)) {
-        setAddProductError("unit", "Select a valid unit");
-        return;
-    }
+    if (!allowedUnits.includes(unit)) return setAddProductError("unit", "Invalid unit");
 
     try {
-        const data = await fetchJson(`${API_BASE}/owner/products`, {
+        const formData = new FormData();
+
+        formData.append("name", name);
+        formData.append("description", description);
+        formData.append("price", price);
+        formData.append("quantity", quantity);
+        formData.append("unit", unit);
+
+        if (imageFile) {
+            formData.append("image", imageFile);
+        }
+
+        const res = await fetch(`${API_BASE}/owner/products`, {
             method: "POST",
-            headers: authHeaders(),
-            body: JSON.stringify({ name, description, price, quantity, unit })
+            headers: {
+                "Authorization": `Bearer ${token}`
+            },
+            body: formData
         });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+
         setMsgSuccess(data.message);
+
         document.getElementById("pname").value = "";
         document.getElementById("pdescription").value = "";
         document.getElementById("pprice").value = "";
         document.getElementById("pquantity").value = "";
         document.getElementById("punit").value = "kg";
-        clearAddProductErrors();
+        document.getElementById("pimage").value = "";
+
         await loadStoreAndProducts({ preserveMsg: true });
+
     } catch (e) {
         setMsgError(e.message);
     }

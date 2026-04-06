@@ -30,6 +30,10 @@ function buildItemKey(name, priceText) {
     return `${name}||${priceText}`;
 }
 
+function buildImageUrl(image) {
+    return image ? `http://localhost:3000/uploads/${image}` : "";
+}
+
 function getQtyInCart(itemKey) {
     const carts = getCartData();
     const storeCart = carts[storeId];
@@ -43,20 +47,15 @@ function setQtyInCart(itemKey, itemPayload, nextQty) {
     const carts = getCartData();
     const storeName = localStorage.getItem("storeName") || `Store ${storeId}`;
 
-    if (!carts[storeId] || typeof carts[storeId] !== "object") {
+    if (!carts[storeId]) {
         carts[storeId] = { storeName, items: {} };
-    }
-    if (!carts[storeId].items || typeof carts[storeId].items !== "object") {
-        carts[storeId].items = {};
     }
 
     const items = carts[storeId].items;
 
     if (nextQty <= 0) {
         delete items[itemKey];
-        if (Object.keys(items).length === 0) {
-            delete carts[storeId];
-        }
+        if (Object.keys(items).length === 0) delete carts[storeId];
         saveCartData(carts);
         return;
     }
@@ -75,21 +74,23 @@ function updateStepperUi(stepperEl, itemKey) {
     const qtyEl = stepperEl.querySelector(".qty-value");
 
     const card = stepperEl.closest(".store-card");
-    const addBtn = card ? card.querySelector(".add-to-cart-btn") : null;
+    const addBtn = card.querySelector(".add-to-cart-btn");
 
-    if (qtyEl) qtyEl.innerText = String(qty);
-    if (decBtn) decBtn.disabled = qty <= 0;
+    qtyEl.innerText = qty;
+    decBtn.disabled = qty <= 0;
 
-    // Toggle: show Add-to-Cart when qty is 0, else show stepper
     if (qty <= 0) {
-        if (stepperEl) stepperEl.style.display = "none";
-        if (addBtn) addBtn.style.display = "inline-block";
+        stepperEl.style.display = "none";
+        addBtn.style.display = "inline-block";
     } else {
-        if (stepperEl) stepperEl.style.display = "inline-flex";
-        if (addBtn) addBtn.style.display = "none";
+        stepperEl.style.display = "inline-flex";
+        addBtn.style.display = "none";
     }
 }
 
+// =========================
+// 🔥 UPDATED PRODUCT CARD
+// =========================
 function createProductCard(product) {
     const name = product.name;
     const quantity = product.quantity || 1;
@@ -97,11 +98,14 @@ function createProductCard(product) {
     const description = String(product.description || "").trim();
     const priceText = buildPriceText(product.price, quantity, unit);
     const itemKey = buildItemKey(name, priceText);
+    const imageUrl = buildImageUrl(product.image);
 
     const div = document.createElement("div");
     div.classList.add("store-card", "store-card--product");
 
     div.innerHTML = `
+        ${imageUrl ? `<img src="${imageUrl}" class="product-img">` : ""}
+
         <div class="product-card__top">
             <h3 class="product-card__name">${name}</h3>
             <p class="product-card__price">${priceText}</p>
@@ -110,11 +114,12 @@ function createProductCard(product) {
         ${description ? `<p class="product-card__description">${description}</p>` : ""}
 
         <div class="product-card__actions">
-            <button type="button" class="add-to-cart-btn">Add to Cart</button>
-            <div class="qty-stepper" aria-label="Quantity controls">
-                <button type="button" class="qty-btn" data-action="dec" aria-label="Decrease">−</button>
-                <span class="qty-value" aria-live="polite">0</span>
-                <button type="button" class="qty-btn" data-action="inc" aria-label="Increase">+</button>
+            <button class="add-to-cart-btn">Add to Cart</button>
+
+            <div class="qty-stepper">
+                <button data-action="dec">−</button>
+                <span class="qty-value">0</span>
+                <button data-action="inc">+</button>
             </div>
         </div>
     `;
@@ -124,39 +129,28 @@ function createProductCard(product) {
     const incBtn = div.querySelector("[data-action='inc']");
     const decBtn = div.querySelector("[data-action='dec']");
 
-    const payload = {
-        name,
-        price: priceText,
-        quantity,
-        unit
+    const payload = { name, price: priceText, quantity, unit, image: product.image || "" };
+
+    incBtn.onclick = () => {
+        const current = getQtyInCart(itemKey);
+        setQtyInCart(itemKey, payload, current + 1);
+        updateStepperUi(stepper, itemKey);
     };
 
-    if (incBtn) {
-        incBtn.onclick = () => {
-            const current = getQtyInCart(itemKey);
-            setQtyInCart(itemKey, payload, current + 1);
-            updateStepperUi(stepper, itemKey);
-        };
-    }
+    addBtn.onclick = () => {
+        const current = getQtyInCart(itemKey);
+        setQtyInCart(itemKey, payload, Math.max(1, current + 1));
+        updateStepperUi(stepper, itemKey);
+    };
 
-    if (addBtn) {
-        addBtn.onclick = () => {
-            const current = getQtyInCart(itemKey);
-            // First add: go to 1
-            setQtyInCart(itemKey, payload, Math.max(1, current + 1));
-            updateStepperUi(stepper, itemKey);
-        };
-    }
-
-    if (decBtn) {
-        decBtn.onclick = () => {
-            const current = getQtyInCart(itemKey);
-            setQtyInCart(itemKey, payload, current - 1);
-            updateStepperUi(stepper, itemKey);
-        };
-    }
+    decBtn.onclick = () => {
+        const current = getQtyInCart(itemKey);
+        setQtyInCart(itemKey, payload, current - 1);
+        updateStepperUi(stepper, itemKey);
+    };
 
     updateStepperUi(stepper, itemKey);
+
     return div;
 }
 
@@ -169,7 +163,7 @@ function renderProducts(data) {
     }
 
     container.innerHTML = "";
-    data.forEach(product => container.appendChild(createProductCard(product)));
+    data.forEach(p => container.appendChild(createProductCard(p)));
 }
 
 function renderStoreInfo(store) {
@@ -179,31 +173,24 @@ function renderStoreInfo(store) {
     if (storeInfoDeliveryEl) storeInfoDeliveryEl.innerText = `Delivery: ${store?.delivery_available ? "Available" : "Not available"}`;
     if (storeInfoPickupEl) storeInfoPickupEl.innerText = `Pickup: ${store?.pickup_available ? "Available" : "Not available"}`;
 
-    if (storeInfoFeeEl) {
-        if (store?.delivery_available) {
-            const fee = Number(store.delivery_charge || 0);
-            const freeAbove = Number(store.min_order_free_delivery || 0);
-            storeInfoFeeEl.innerText = `Delivery fee: ₹${fee} • Free above ₹${freeAbove}`;
-        } else {
-            storeInfoFeeEl.innerText = "";
-        }
+    if (storeInfoFeeEl && store?.delivery_available) {
+        const fee = Number(store.delivery_charge || 0);
+        const freeAbove = Number(store.min_order_free_delivery || 0);
+        storeInfoFeeEl.innerText = `Delivery fee: ₹${fee} • Free above ₹${freeAbove}`;
     }
 }
 
-// DB se products fetch
+// =========================
+// FETCH DATA
+// =========================
 fetch(`http://localhost:3000/products/${storeId}`)
     .then(res => res.json())
     .then(renderProducts)
-    .catch(err => {
-        console.log(err);
-        if (container) container.innerHTML = "<h2>Error loading products</h2>";
+    .catch(() => {
+        container.innerHTML = "<h2>Error loading products</h2>";
     });
 
-// Fetch store delivery/pickup info
 fetch(`http://localhost:3000/store/${storeId}`)
     .then(res => res.json())
     .then(renderStoreInfo)
-    .catch(err => {
-        console.log(err);
-        renderStoreInfo(null);
-    });
+    .catch(() => renderStoreInfo(null));

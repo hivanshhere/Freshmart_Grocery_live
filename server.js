@@ -3,12 +3,20 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 const mysql2 = require("mysql2");
 const mysql = require("mysql2/promise");
+const multer = require("multer");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const uploadsDir = path.join(__dirname, "uploads");
+fs.mkdirSync(uploadsDir, { recursive: true });
+
+app.use("/uploads", express.static(uploadsDir));
 app.use(express.static("public"));
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -21,6 +29,23 @@ const DB_NAME = process.env.DB_NAME;
 
 let db;
 let dbp;
+
+const upload = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => cb(null, uploadsDir),
+        filename: (req, file, cb) => {
+            const ext = path.extname(file.originalname || "").toLowerCase() || ".png";
+            cb(null, `${Date.now()}-${crypto.randomBytes(6).toString("hex")}${ext}`);
+        }
+    }),
+    fileFilter: (req, file, cb) => {
+        if (!file.mimetype || !file.mimetype.startsWith("image/")) {
+            return cb(new Error("Only image files are allowed"));
+        }
+        cb(null, true);
+    },
+    limits: { fileSize: 5 * 1024 * 1024 }
+});
 
 function asyncHandler(fn) {
     return (req, res, next) => {
@@ -106,11 +131,13 @@ async function initDb() {
             price DECIMAL(10,2) NOT NULL,
             quantity DECIMAL(10,2) NOT NULL,
             unit VARCHAR(20) NOT NULL,
-            description VARCHAR(255) DEFAULT ''
+            description VARCHAR(255) DEFAULT '',
+            image VARCHAR(255) DEFAULT NULL
         )
     `);
 
     try { await dbp.query("ALTER TABLE products ADD COLUMN description VARCHAR(255) DEFAULT ''"); } catch {}
+    try { await dbp.query("ALTER TABLE products ADD COLUMN image VARCHAR(255) DEFAULT NULL"); } catch {}
 
     await dbp.query(`
         CREATE TABLE IF NOT EXISTS orders (
@@ -314,7 +341,7 @@ app.get("/products/:storeId", asyncHandler(async (req, res) => {
     if (!Number.isFinite(storeId)) return res.status(400).json({ message: "Invalid store id" });
 
     const [rows] = await dbp.query(
-        "SELECT id, store_id, name, price, quantity, unit, description FROM products WHERE store_id=? ORDER BY id DESC",
+        "SELECT id, store_id, name, price, quantity, unit, description, image FROM products WHERE store_id=? ORDER BY id DESC",
         [storeId]
     );
     res.json(rows);
@@ -374,29 +401,32 @@ app.get("/owner/products", requireAuth, requireOwner, asyncHandler(async (req, r
     if (!store) return res.json({ products: [] });
 
     const [rows] = await dbp.query(
-        "SELECT id, store_id, name, price, quantity, unit, description FROM products WHERE store_id=? ORDER BY id DESC",
+        "SELECT id, store_id, name, price, quantity, unit, description, image FROM products WHERE store_id=? ORDER BY id DESC",
         [store.id]
     );
     res.json({ products: rows });
 }));
 
-app.post("/owner/products", requireAuth, requireOwner, asyncHandler(async (req, res) => {
+app.post("/owner/products", requireAuth, requireOwner, upload.single("image"), asyncHandler(async (req, res) => {
     const { name, price, quantity, unit, description } = req.body || {};
-    if (!name || price === undefined || quantity === undefined || !unit || !description) {
-        return res.status(400).json({ message: "Missing fields" });
-    }
+    const productName = String(name || "").trim();
+    const productUnit = String(unit || "").trim();
+    const descriptionText = String(description || "").trim();
+    const productPrice = Number(price);
+    const productQuantity = Number(quantity);
 
-    const descriptionText = String(description).trim();
-    if (!descriptionText) {
+    if (!productName || !productUnit || !Number.isFinite(productPrice) || !Number.isFinite(productQuantity)) {
         return res.status(400).json({ message: "Missing fields" });
     }
 
     const store = await getOwnerStore(req.auth.user.id);
     if (!store) return res.status(400).json({ message: "Create a store first" });
 
+    const image = req.file ? req.file.filename : null;
+
     await dbp.query(
-        "INSERT INTO products (store_id, name, price, quantity, unit, description) VALUES (?, ?, ?, ?, ?, ?)",
-        [store.id, name, price, quantity, unit, descriptionText]
+        "INSERT INTO products (store_id, name, price, quantity, unit, description, image) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [store.id, productName, productPrice, productQuantity, productUnit, descriptionText, image]
     );
     res.json({ message: "Product added" });
 }));
@@ -589,6 +619,9 @@ app.post("/orders", requireAuth, requireCustomer, asyncHandler(async (req, res) 
 app.use((err, req, res, next) => {
     console.error(err);
     if (res.headersSent) return next(err);
+    if (err instanceof multer.MulterError || err?.message === "Only image files are allowed") {
+        return res.status(400).json({ message: err.message });
+    }
     res.status(500).json({ message: "Server error" });
 });
 
