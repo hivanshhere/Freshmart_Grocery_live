@@ -53,6 +53,15 @@ function formatFullAddress(a) {
     };
 }
 
+function escapeHtml(value) {
+    return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+}
+
 function validateAddressForm() {
     const type = (addressTypeEl?.value || "").trim();
     const customer_name = (customerNameEl?.value || "").trim();
@@ -194,7 +203,12 @@ async function loadAddresses() {
         const data = await res.json();
 
         if (!Array.isArray(data) || data.length === 0) {
-            addressListEl.innerHTML = "<div class='help-text'>No saved addresses yet. Add one below.</div>";
+            addressListEl.innerHTML = `
+                <div class="address-empty">
+                    <h4>No saved addresses yet</h4>
+                    <p>Add your first delivery location using the form on the right.</p>
+                </div>
+            `;
             localStorage.removeItem("selectedAddressId");
             return;
         }
@@ -207,21 +221,21 @@ async function loadAddresses() {
         data.forEach((a) => {
             const f = formatFullAddress(a);
             const div = document.createElement("div");
-            div.className = "cart-store";
-            div.style.marginBottom = "12px";
-            div.style.boxShadow = "0 3px 10px rgba(0,0,0,0.10)";
-            div.style.transform = "none";
+            div.className = "address-card";
 
             div.innerHTML = `
                 <div class="address-card__header">
-                    <h2 style="margin:0; font-size:18px;">${f.title}</h2>
-                    <div style="display:flex; gap:10px;">
+                    <div class="address-card__heading-group">
+                        <span class="address-chip">${escapeHtml(f.title)}</span>
+                        <h4 class="address-card__name">${escapeHtml(a.customer_name || "Saved address")}</h4>
+                    </div>
+                    <div class="address-card__actions">
                         <button type="button" class="cart-edit-btn" data-action="edit">Edit</button>
                         <button type="button" class="cart-delete-btn" data-action="delete">Delete</button>
                     </div>
                 </div>
-                ${f.who ? `<div class="help-text" style="margin:6px 0 0;">${f.who}</div>` : ""}
-                <div style="margin-top:10px; color:#222;">${f.line}</div>
+                ${f.who ? `<div class="address-card__meta">${escapeHtml(f.who)}</div>` : ""}
+                <div class="address-card__line">${escapeHtml(f.line)}</div>
             `;
 
             const delBtn = div.querySelector("[data-action='delete']");
@@ -233,7 +247,12 @@ async function loadAddresses() {
             addressListEl.appendChild(div);
         });
     } catch {
-        addressListEl.innerHTML = "<div class='help-text'>Could not load addresses.</div>";
+        addressListEl.innerHTML = `
+            <div class="address-empty">
+                <h4>Could not load addresses</h4>
+                <p>Please refresh the page and try again.</p>
+            </div>
+        `;
     }
 }
 

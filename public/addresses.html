@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>My Addresses</title>
 <link rel="stylesheet" href="cartstyle.css">
 </head>
@@ -15,26 +16,42 @@
 </nav>
 </header>
 
-<section class="cart-container">
-    <section class="cart-checkout" style="margin-bottom:18px;">
-        <h3>Saved Addresses</h3>
-        <div id="addressList" style="margin-top:12px;"></div>
+<main class="addresses-page">
+    <section class="addresses-hero">
+        <p class="addresses-hero__eyebrow">Delivery details</p>
+        <h2>Manage saved addresses</h2>
+        <p>Keep your home, work, and other delivery locations ready so checkout stays quick and clean.</p>
     </section>
 
-    <section class="cart-checkout">
-        <h3>Add new address</h3>
+    <section class="addresses-layout">
+        <section class="addresses-panel">
+            <div class="addresses-panel__header">
+                <div>
+                    <p class="addresses-panel__eyebrow">Saved locations</p>
+                    <h3>Saved Addresses</h3>
+                </div>
+            </div>
+            <div id="addressList" class="address-list"></div>
+        </section>
 
-        <div class="cart-checkout__row" style="margin-top:12px;">
-            <label for="addressType">Type</label>
-            <select id="addressType">
-                <option value="Home">Home</option>
-                <option value="Work">Work</option>
-                <option value="Other">Other</option>
-            </select>
-        </div>
+        <section class="addresses-panel addresses-panel--form">
+            <div class="addresses-panel__header">
+                <div>
+                    <p class="addresses-panel__eyebrow">Add or update</p>
+                    <h3>Add new address</h3>
+                </div>
+            </div>
 
-        <div class="cart-address-add" style="border-top:none; padding-top:0; margin-top:12px;">
-            <div class="cart-address-add__grid">
+            <div class="cart-checkout__row">
+                <label for="addressType">Type</label>
+                <select id="addressType">
+                    <option value="Home">Home</option>
+                    <option value="Work">Work</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+
+            <div class="address-form__grid">
                 <div>
                     <label for="customerName">Name</label>
                     <input id="customerName" type="text" placeholder="Your name" autocomplete="name" required maxlength="100">
@@ -57,7 +74,7 @@
 
                 <div>
                     <label for="landmark">Landmark (optional)</label>
-                    <input id="landmark" type="text" placeholder="Near…" maxlength="160">
+                    <input id="landmark" type="text" placeholder="Near..." maxlength="160">
                 </div>
 
                 <div>
@@ -71,12 +88,14 @@
                 </div>
             </div>
 
-            <button class="cart-checkout-btn" type="button" onclick="saveAddress()">Save Address</button>
-        </div>
+            <div class="address-form__actions">
+                <button class="cart-checkout-btn address-submit-btn" type="button" onclick="saveAddress()">Save Address</button>
+            </div>
+        </section>
     </section>
-</section>
+</main>
 
-<p id="msg" class="cart-msg"></p>
+<p id="msg" class="cart-msg address-msg"></p>
 
 <script src="nav.js"></script>
 <script src="addresses.js"></script>
