@@ -166,20 +166,6 @@ flex-direction:column;
 gap:4px;
 }
 
-.cart-item-image{
-display:block;
-width:72px;
-height:72px;
-object-fit:contain;
-object-position:center;
-background:#fff;
-padding:4px;
-box-sizing:border-box;
-border-radius:10px;
-margin-bottom:6px;
-border:1px solid rgba(0,0,0,0.08);
-}
-
 .cart-item-name{
 font-weight:bold;
 color:#222;

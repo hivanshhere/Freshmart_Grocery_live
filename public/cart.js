@@ -79,10 +79,6 @@ function getStoreDisplayName(storeCart, storeData) {
     return fromCart || fromServer || fromLocal || "Store"
 }
 
-function buildImageUrl(image) {
-    return image ? `http://localhost:3000/uploads/${image}` : ""
-}
-
 async function loadAddresses() {
     const token = localStorage.getItem("authToken")
     if (!token || !isCustomerLoggedIn()) {
@@ -270,7 +266,6 @@ async function renderCart() {
             const left = document.createElement("div")
             left.className = "cart-item-left"
             left.innerHTML = `
-                ${item.image ? `<img src="${buildImageUrl(item.image)}" class="cart-item-image" alt="${item.name}">` : ""}
                 <div class="cart-item-name">${item.name}</div>
                 <div class="cart-item-meta">${item.price}</div>
             `
