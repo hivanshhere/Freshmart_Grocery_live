@@ -487,6 +487,10 @@ outline:none;
 transition:border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.addresses-panel--form .address-uppercase{
+text-transform:uppercase;
+}
+
 .addresses-panel--form select:focus,
 .addresses-panel--form input:focus{
 border-color:#27ae60;

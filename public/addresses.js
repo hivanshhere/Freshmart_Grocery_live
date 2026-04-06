@@ -14,6 +14,24 @@ const pincodeEl = document.getElementById("pincode");
 
 let editingAddressId = null;
 
+const uppercaseFields = [customerNameEl, houseEl, areaEl, landmarkEl, cityEl].filter(Boolean);
+
+function toUppercaseValue(value) {
+    return String(value || "").toUpperCase();
+}
+
+function bindUppercaseInput(el) {
+    if (!el) return;
+    el.addEventListener("input", () => {
+        const upper = toUppercaseValue(el.value);
+        if (el.value !== upper) {
+            el.value = upper;
+        }
+    });
+}
+
+uppercaseFields.forEach(bindUppercaseInput);
+
 function setMsg(text) {
     if (!msgEl) return;
     msgEl.innerText = text || "";
@@ -64,12 +82,12 @@ function escapeHtml(value) {
 
 function validateAddressForm() {
     const type = (addressTypeEl?.value || "").trim();
-    const customer_name = (customerNameEl?.value || "").trim();
+    const customer_name = toUppercaseValue(customerNameEl?.value).trim();
     const phone = (phoneEl?.value || "").trim();
-    const house = (houseEl?.value || "").trim();
-    const area = (areaEl?.value || "").trim();
-    const landmark = (landmarkEl?.value || "").trim();
-    const city = (cityEl?.value || "").trim();
+    const house = toUppercaseValue(houseEl?.value).trim();
+    const area = toUppercaseValue(areaEl?.value).trim();
+    const landmark = toUppercaseValue(landmarkEl?.value).trim();
+    const city = toUppercaseValue(cityEl?.value).trim();
     const pincode = (pincodeEl?.value || "").trim();
 
     if (!type) {
@@ -112,8 +130,8 @@ function validateAddressForm() {
         pincodeEl?.focus();
         return null;
     }
-    if (!/^\d{5,10}$/.test(pincode)) {
-        setMsg("Pincode must be 5 to 10 digits");
+    if (!/^\d{6,10}$/.test(pincode)) {
+        setMsg("Pincode must be at least 6 digits");
         pincodeEl?.focus();
         return null;
     }
@@ -134,7 +152,7 @@ function resetAddressForm() {
     // Keep name prefilled if available
     if (customerNameEl && !customerNameEl.value) {
         const n = localStorage.getItem("userName");
-        if (n) customerNameEl.value = n;
+        if (n) customerNameEl.value = toUppercaseValue(n);
     }
 
     const btn = document.querySelector("button[onclick='saveAddress()']");
@@ -147,12 +165,12 @@ function startEditAddress(address) {
     if (!Number.isFinite(editingAddressId)) return;
 
     if (addressTypeEl) addressTypeEl.value = address.type || "Home";
-    if (customerNameEl) customerNameEl.value = address.customer_name || "";
+    if (customerNameEl) customerNameEl.value = toUppercaseValue(address.customer_name);
     if (phoneEl) phoneEl.value = address.phone || "";
-    if (houseEl) houseEl.value = address.house || "";
-    if (areaEl) areaEl.value = address.area || "";
-    if (landmarkEl) landmarkEl.value = address.landmark || "";
-    if (cityEl) cityEl.value = address.city || "";
+    if (houseEl) houseEl.value = toUppercaseValue(address.house);
+    if (areaEl) areaEl.value = toUppercaseValue(address.area);
+    if (landmarkEl) landmarkEl.value = toUppercaseValue(address.landmark);
+    if (cityEl) cityEl.value = toUppercaseValue(address.city);
     if (pincodeEl) pincodeEl.value = address.pincode || "";
 
     const btn = document.querySelector("button[onclick='saveAddress()']");
@@ -300,7 +318,7 @@ async function saveAddress() {
 // Prefill name
 if (customerNameEl && !customerNameEl.value) {
     const n = localStorage.getItem("userName");
-    if (n) customerNameEl.value = n;
+    if (n) customerNameEl.value = toUppercaseValue(n);
 }
 
 loadAddresses();

@@ -54,7 +54,7 @@
             <div class="address-form__grid">
                 <div>
                     <label for="customerName">Name</label>
-                    <input id="customerName" type="text" placeholder="Your name" autocomplete="name" required maxlength="100">
+                    <input id="customerName" class="address-uppercase" type="text" placeholder="Your name" autocomplete="name" required maxlength="100">
                 </div>
 
                 <div>
@@ -64,27 +64,27 @@
 
                 <div>
                     <label for="house">House / Flat</label>
-                    <input id="house" type="text" placeholder="House no, flat, building" autocomplete="address-line1" required maxlength="120">
+                    <input id="house" class="address-uppercase" type="text" placeholder="House no, flat, building" autocomplete="address-line1" required maxlength="120">
                 </div>
 
                 <div>
                     <label for="area">Area / Street</label>
-                    <input id="area" type="text" placeholder="Street, area" autocomplete="address-line2" required maxlength="160">
+                    <input id="area" class="address-uppercase" type="text" placeholder="Street, area" autocomplete="address-line2" required maxlength="160">
                 </div>
 
                 <div>
                     <label for="landmark">Landmark (optional)</label>
-                    <input id="landmark" type="text" placeholder="Near..." maxlength="160">
+                    <input id="landmark" class="address-uppercase" type="text" placeholder="Near..." maxlength="160">
                 </div>
 
                 <div>
                     <label for="city">City</label>
-                    <input id="city" type="text" placeholder="City" autocomplete="address-level2" required maxlength="80">
+                    <input id="city" class="address-uppercase" type="text" placeholder="City" autocomplete="address-level2" required maxlength="80">
                 </div>
 
                 <div>
                     <label for="pincode">Pincode</label>
-                    <input id="pincode" type="text" placeholder="Pincode" inputmode="numeric" autocomplete="postal-code" required pattern="[0-9]{5,10}" maxlength="10">
+                    <input id="pincode" type="text" placeholder="Pincode" inputmode="numeric" autocomplete="postal-code" required pattern="[0-9]{6,10}" minlength="6" maxlength="10">
                 </div>
             </div>
 
