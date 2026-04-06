@@ -130,8 +130,8 @@ function validateAddressForm() {
         pincodeEl?.focus();
         return null;
     }
-    if (!/^\d{6,10}$/.test(pincode)) {
-        setMsg("Pincode must be at least 6 digits");
+    if (!/^\d{6}$/.test(pincode)) {
+        setMsg("Pincode must be exactly 6 digits");
         pincodeEl?.focus();
         return null;
     }
