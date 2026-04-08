@@ -334,11 +334,9 @@ async function renderCart() {
         btn.className = "cart-place-btn"
         btn.type = "button"
         btn.innerText = "Place Order"
-        btn.onclick = () => placeOrder(storeId, {
-            deliveryFee,
-            deliveryType,
-            slotSelect
-        })
+        btn.onclick = () => {
+            window.location.href = "order-placed.html"
+        }
         section.appendChild(btn)
 
         container.appendChild(section)
