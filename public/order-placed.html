@@ -20,11 +20,33 @@
     <section class="order-placed-card" aria-label="Order placed confirmation">
         <h2 class="order-placed-title">Order Placed</h2>
         <p class="order-placed-subtitle">Thank You</p>
-        <p class="order-placed-again">Order Again</p>
+        <button type="button" class="order-again-btn" id="orderAgainBtn">Order Again</button>
     </section>
 </main>
 
 <script src="nav.js"></script>
+
+<script>
+    (function setupOrderAgain(){
+        const btn = document.getElementById("orderAgainBtn");
+        if (!btn) return;
+
+        const params = new URLSearchParams(window.location.search);
+        const storeId = params.get("storeId");
+        const storeName = params.get("storeName");
+
+        btn.onclick = function(){
+            if (storeId) {
+                localStorage.setItem("storeId", storeId);
+                if (storeName) localStorage.setItem("storeName", storeName);
+                window.location.href = "store-products.html?storeId=" + encodeURIComponent(storeId);
+                return;
+            }
+
+            window.location.href = "stores.html";
+        };
+    })();
+</script>
 
 </body>
 </html>

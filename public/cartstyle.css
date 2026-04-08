@@ -299,6 +299,26 @@ color:#222;
 opacity:0.9;
 }
 
+.order-again-btn{
+margin-top:18px;
+background:#27ae60;
+color:white;
+border:none;
+padding:12px 18px;
+border-radius:10px;
+cursor:pointer;
+font-weight:bold;
+font-size:16px;
+transition:all 0.2s ease;
+box-shadow:0 8px 18px rgba(0,0,0,0.14);
+}
+
+.order-again-btn:hover{
+background:#219150;
+transform:translateY(-1px);
+box-shadow:0 12px 22px rgba(0,0,0,0.18);
+}
+
 /* Addresses page */
 
 .addresses-page{

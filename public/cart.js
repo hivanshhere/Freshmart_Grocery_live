@@ -335,7 +335,8 @@ async function renderCart() {
         btn.type = "button"
         btn.innerText = "Place Order"
         btn.onclick = () => {
-            window.location.href = "order-placed.html"
+            const storeNameParam = storeName ? `&storeName=${encodeURIComponent(storeName)}` : ""
+            window.location.href = `order-placed.html?storeId=${encodeURIComponent(storeId)}${storeNameParam}`
         }
         section.appendChild(btn)
 
