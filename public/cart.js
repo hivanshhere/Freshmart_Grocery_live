@@ -398,18 +398,8 @@ async function renderCart() {
         breakdown.className = "cart-store-breakdown"
         breakdown.innerHTML = `
             <div><span>Items total</span><strong>${formatRupees(storeTotal)}</strong></div>
-            <div><span>Delivery fee</span><strong>${formatRupees(deliveryFee)}</strong></div>
         `
         section.appendChild(breakdown)
-
-        if (needsDeliveryAddress && deliveryType === "delivery") {
-            const note = document.createElement("div")
-            note.className = "cart-address-note"
-            note.innerHTML = `
-                Delivery address is selected from the <a href="addresses.html">Addresses</a> page.
-            `
-            section.appendChild(note)
-        }
 
         let slotSelect = null
         if (deliveryType === "pickup") {
