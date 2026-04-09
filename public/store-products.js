@@ -173,10 +173,14 @@ function renderStoreInfo(store) {
     if (storeInfoDeliveryEl) storeInfoDeliveryEl.innerText = `Delivery: ${store?.delivery_available ? "Available" : "Not available"}`;
     if (storeInfoPickupEl) storeInfoPickupEl.innerText = `Pickup: ${store?.pickup_available ? "Available" : "Not available"}`;
 
-    if (storeInfoFeeEl && store?.delivery_available) {
-        const fee = Number(store.delivery_charge || 0);
-        const freeAbove = Number(store.min_order_free_delivery || 0);
-        storeInfoFeeEl.innerText = `Delivery fee: ₹${fee} • Free above ₹${freeAbove}`;
+    if (storeInfoFeeEl) {
+        storeInfoFeeEl.innerText = "";
+
+        if (store?.delivery_available) {
+            const fee = Number(store.delivery_charge ?? 0) || 0;
+            const freeAbove = Number(store.min_order_free_delivery ?? 0) || 0;
+            storeInfoFeeEl.innerText = `Delivery fee: ₹${fee} • Free above ₹${freeAbove}`;
+        }
     }
 }
 
