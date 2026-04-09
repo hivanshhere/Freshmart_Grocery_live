@@ -252,6 +252,27 @@ align-items:center;
 gap:12px;
 }
 
+.cart-address-note{
+margin-top:10px;
+padding:10px 12px;
+border-radius:10px;
+background:linear-gradient(180deg, rgba(248,255,249,0.95), rgba(255,255,255,0.98));
+border:1px dashed rgba(39,174,96,0.22);
+color:rgba(0,0,0,0.72);
+font-size:14px;
+line-height:1.5;
+}
+
+.cart-address-note a{
+color:#219150;
+font-weight:bold;
+text-decoration:none;
+}
+
+.cart-address-note a:hover{
+text-decoration:underline;
+}
+
 /* Saved address selector (cart) */
 .cart-addresses{
 background:#fff;

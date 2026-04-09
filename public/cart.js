@@ -307,16 +307,6 @@ async function renderCart() {
         return deliveryType === "delivery"
     })
 
-    const placeBtnUpdaters = []
-
-    if (needsDeliveryAddress) {
-        const selected = String(localStorage.getItem("selectedAddressId") || "")
-        const hasSelected = selected && addressCache.list.some(a => String(a.id) === selected)
-        container.appendChild(buildAddressPicker(addressCache.list, hasSelected ? selected : "", () => {
-            placeBtnUpdaters.forEach(fn => fn())
-        }))
-    }
-
     let grandTotal = 0
 
     for (const storeId of stores) {
@@ -412,6 +402,15 @@ async function renderCart() {
         `
         section.appendChild(breakdown)
 
+        if (needsDeliveryAddress && deliveryType === "delivery") {
+            const note = document.createElement("div")
+            note.className = "cart-address-note"
+            note.innerHTML = `
+                Delivery address is selected from the <a href="addresses.html">Addresses</a> page.
+            `
+            section.appendChild(note)
+        }
+
         let slotSelect = null
         if (deliveryType === "pickup") {
             const slotRow = document.createElement("div")
@@ -459,8 +458,6 @@ async function renderCart() {
             btn.disabled = false
             btn.title = ""
         }
-
-        placeBtnUpdaters.push(updatePlaceBtnState)
         if (slotSelect) slotSelect.addEventListener("change", updatePlaceBtnState)
         updatePlaceBtnState()
 
