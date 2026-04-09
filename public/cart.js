@@ -258,10 +258,23 @@ function changeItemQty(storeId, itemKey, delta) {
 
 function clearStoreCart(storeId) {
     const carts = getCartData()
-    if (carts && carts[storeId]) {
-        delete carts[storeId]
-        saveCartData(carts)
+    if (!carts || typeof carts !== "object") {
+        renderCart()
+        return
     }
+
+    const storeKey = String(storeId)
+    if (Object.prototype.hasOwnProperty.call(carts, storeKey)) {
+        delete carts[storeKey]
+    }
+
+    // If a key was stored with a different numeric formatting (e.g., "01" vs "1")
+    const numericKey = String(Number(storeKey))
+    if (numericKey !== storeKey && Object.prototype.hasOwnProperty.call(carts, numericKey)) {
+        delete carts[numericKey]
+    }
+
+    saveCartData(carts)
     renderCart()
 }
 
@@ -536,11 +549,7 @@ async function placeOrder(storeId, options) {
             return
         }
 
-        const carts = getCartData()
-        if (carts && carts[storeId]) {
-            delete carts[storeId]
-            saveCartData(carts)
-        }
+        clearStoreCart(storeId)
         window.location.href = "order-placed.html"
     } catch {
         setMsg("Order failed")
