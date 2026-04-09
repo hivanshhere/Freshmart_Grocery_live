@@ -152,6 +152,11 @@ async function initDb() {
         )
     `);
 
+    // Backward-compatible migrations (if the table existed before new columns were added)
+    try { await dbp.query("ALTER TABLE orders ADD COLUMN address_id INT"); } catch {}
+    try { await dbp.query("ALTER TABLE orders ADD COLUMN slot_id INT"); } catch {}
+    try { await dbp.query("ALTER TABLE orders ADD COLUMN delivery_fee INT DEFAULT 0"); } catch {}
+
     await dbp.query(`
         CREATE TABLE IF NOT EXISTS order_items (
             id INT AUTO_INCREMENT PRIMARY KEY,
