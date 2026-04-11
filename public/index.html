@@ -1,46 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Local Grocery Store</title>
 <link rel="stylesheet" href="style.css">
 </head>
-    <body>
+<body>
     <header>
         <h1>FreshMart Grocery</h1>
-
         <nav>
             <a href="index.html">Home</a>
             <button type="button" class="nav-btn" onclick="location.href='login.html'">Login</button>
         </nav>
     </header>
+
     <main class="home-main">
         <section class="hero">
-            <h2>Order Groceries From Your Local Store</h2>
-            <p>Fresh products delivered to your doorstep or ready for pickup.</p>
-            <button onclick="localStorage.setItem('afterLogin','stores.html'); location.href='login.html';">Shop Now</button>
+            <div class="hero__content">
+                <p class="hero__eyebrow">Fresh grocery shopping made simple</p>
+                <h2>Order groceries from your nearby local store</h2>
+                <p>Fresh fruits, vegetables, daily essentials, and quick delivery or pickup from trusted neighbourhood stores.</p>
+
+                <div class="hero__actions">
+                    <button onclick="localStorage.setItem('afterLogin','stores.html'); location.href='login.html';">Shop Now</button>
+                </div>
+
+                <div class="hero__stats" aria-label="Store highlights">
+                    <div class="hero-stat">
+                        <strong>Fresh</strong>
+                        <span>Daily grocery essentials</span>
+                    </div>
+                    <div class="hero-stat">
+                        <strong>Fast</strong>
+                        <span>Pickup and delivery options</span>
+                    </div>
+                    <div class="hero-stat">
+                        <strong>Simple</strong>
+                        <span>Easy ordering flow</span>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <section class="features">
             <div class="card">
+                <div class="card__icon" aria-hidden="true">🥬</div>
                 <h3>Fresh Products</h3>
-                <p>Daily fresh grocery items available.</p>
+                <p>Daily fresh grocery items with a clean and simple browsing experience.</p>
             </div>
 
             <div class="card">
+                <div class="card__icon" aria-hidden="true">🚚</div>
                 <h3>Fast Delivery</h3>
-                <p>Delivery within limited distance.</p>
+                <p>Quick doorstep delivery from local stores based on availability.</p>
             </div>
 
             <div class="card">
+                <div class="card__icon" aria-hidden="true">🛍️</div>
                 <h3>Store Pickup</h3>
-                <p>Order online and pick up from store.</p>
+                <p>Order online and collect your groceries from the store at your convenience.</p>
             </div>
         </section>
     </main>
-<footer>
-    <p>© 2026 Local Grocery Store</p>
-</footer>
-<script src="nav.js"></script>
+
+    <footer>
+        <p>&copy; 2026 FreshMart Grocery</p>
+    </footer>
+
+    <script src="nav.js"></script>
 </body>
 </html>

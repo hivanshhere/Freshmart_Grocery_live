@@ -313,10 +313,11 @@ transform:translateY(-1px);
 }
 
 .help-text{
-	margin:0;
-	font-size:13px;
-	line-height:1.4;
-	color:rgba(0,0,0,0.65);
+margin:8px 0 0;
+font-size:13px;
+line-height:1.4;
+color:rgba(0,0,0,0.65);
+text-align:left;
 }
 
 /* Pickup slot manager */

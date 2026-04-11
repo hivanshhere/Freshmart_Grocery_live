@@ -1,4 +1,3 @@
-// storeId localStorage se lena
 const storeId = localStorage.getItem("storeId");
 
 if (!storeId) {
@@ -88,9 +87,6 @@ function updateStepperUi(stepperEl, itemKey) {
     }
 }
 
-// =========================
-// 🔥 UPDATED PRODUCT CARD
-// =========================
 function createProductCard(product) {
     const name = product.name;
     const quantity = product.quantity || 1;
@@ -104,7 +100,7 @@ function createProductCard(product) {
     div.classList.add("store-card", "store-card--product");
 
     div.innerHTML = `
-        ${imageUrl ? `<img src="${imageUrl}" class="product-img">` : ""}
+        ${imageUrl ? `<img src="${imageUrl}" class="product-img" alt="${name}">` : ""}
 
         <div class="product-card__top">
             <h3 class="product-card__name">${name}</h3>
@@ -117,9 +113,9 @@ function createProductCard(product) {
             <button class="add-to-cart-btn">Add to Cart</button>
 
             <div class="qty-stepper">
-                <button data-action="dec">−</button>
+                <button data-action="dec" aria-label="Decrease quantity">-</button>
                 <span class="qty-value">0</span>
-                <button data-action="inc">+</button>
+                <button data-action="inc" aria-label="Increase quantity">+</button>
             </div>
         </div>
     `;
@@ -158,7 +154,12 @@ function renderProducts(data) {
     if (!container) return;
 
     if (!data || data.length === 0) {
-        container.innerHTML = "<h2>No products available</h2>";
+        container.innerHTML = `
+            <div class="store-card store-card--empty">
+                <h2>No products available</h2>
+                <p>Products from this store will appear here once they are added.</p>
+            </div>
+        `;
         return;
     }
 
@@ -180,14 +181,16 @@ function renderStoreInfo(store) {
     }
 }
 
-// =========================
-// FETCH DATA
-// =========================
 fetch(`http://localhost:3000/products/${storeId}`)
     .then(res => res.json())
     .then(renderProducts)
     .catch(() => {
-        container.innerHTML = "<h2>Error loading products</h2>";
+        container.innerHTML = `
+            <div class="store-card store-card--empty">
+                <h2>Error loading products</h2>
+                <p>Please refresh the page and try again.</p>
+            </div>
+        `;
     });
 
 fetch(`http://localhost:3000/store/${storeId}`)

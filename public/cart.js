@@ -285,7 +285,12 @@ async function renderCart() {
 
     const stores = Object.keys(carts || {})
     if (stores.length === 0) {
-        container.innerHTML = "<h2>Cart is empty</h2>"
+        container.innerHTML = `
+            <div class="cart-store">
+                <h2>Cart is empty</h2>
+                <p class="cart-item-meta">Add products from a store to see them here.</p>
+            </div>
+        `
         if (totalAmountEl) totalAmountEl.innerText = "₹0"
         return
     }
@@ -371,7 +376,7 @@ async function renderCart() {
             const stepper = document.createElement("div")
             stepper.className = "qty-stepper"
             stepper.innerHTML = `
-                <button type="button" class="qty-btn" data-action="dec" aria-label="Decrease">−</button>
+                <button type="button" class="qty-btn" data-action="dec" aria-label="Decrease">-</button>
                 <span class="qty-value" aria-live="polite">${item.qty}</span>
                 <button type="button" class="qty-btn" data-action="inc" aria-label="Increase">+</button>
             `
@@ -401,7 +406,6 @@ async function renderCart() {
         `
         section.appendChild(breakdown)
 
-        let slotSelect = null
         if (deliveryType === "pickup") {
             const slotRow = document.createElement("div")
             slotRow.className = "cart-store-slot"
@@ -410,7 +414,7 @@ async function renderCart() {
             slotLabel.innerText = "Pickup Time Slot"
             slotLabel.setAttribute("for", `slot-${storeId}`)
 
-            slotSelect = document.createElement("select")
+            const slotSelect = document.createElement("select")
             slotSelect.id = `slot-${storeId}`
             await loadSlots(storeId, slotSelect)
 

@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Your Cart</title>
 <link rel="stylesheet" href="cartstyle.css">
 </head>
@@ -15,16 +17,24 @@
 </nav>
 </header>
 
-<section class="cart-container" id="cartItems"></section>
+<main class="cart-page">
+    <section class="cart-hero">
+        <p class="cart-hero__eyebrow">Review your order</p>
+        <h2>Check items before checkout</h2>
+        <p>Update quantities, review store totals, and continue with confidence.</p>
+    </section>
 
-<section class="cart-summary">
-    <div class="cart-summary__line">
-        <span>Grand Total</span>
-        <strong id="totalAmount">₹0</strong>
-    </div>
-</section>
+    <section class="cart-container" id="cartItems"></section>
 
-<p id="msg" class="cart-msg"></p>
+    <section class="cart-summary">
+        <div class="cart-summary__line">
+            <span>Grand Total</span>
+            <strong id="totalAmount">₹0</strong>
+        </div>
+    </section>
+
+    <p id="msg" class="cart-msg"></p>
+</main>
 
 <script src="nav.js"></script>
 <script src="cart.js"></script>
