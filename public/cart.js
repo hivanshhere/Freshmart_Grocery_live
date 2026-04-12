@@ -7,84 +7,6 @@ const addressCache = {
     list: []
 }
 
-function escapeHtml(value) {
-    return String(value || "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#39;")
-}
-
-function formatAddressLine(a) {
-    const parts = []
-    if (a.house) parts.push(a.house)
-    if (a.area) parts.push(a.area)
-    if (a.landmark) parts.push(a.landmark)
-    if (a.city) parts.push(a.city)
-    if (a.pincode) parts.push(a.pincode)
-    return parts.length ? parts.join(", ") : (a.address_line || "")
-}
-
-function buildAddressPicker(addresses, selectedId, onChange) {
-    const wrapper = document.createElement("div")
-    wrapper.className = "cart-addresses"
-
-    const header = document.createElement("div")
-    header.className = "cart-addresses__header"
-    header.innerHTML = `
-        <div>
-            <div class="cart-addresses__title">Select delivery address</div>
-            <div class="cart-addresses__hint">Only saved addresses can be used for delivery.</div>
-        </div>
-        <a class="cart-addresses__link" href="addresses.html">Manage</a>
-    `
-    wrapper.appendChild(header)
-
-    if (!Array.isArray(addresses) || addresses.length === 0) {
-        const empty = document.createElement("div")
-        empty.className = "cart-addresses__empty"
-        empty.innerHTML = "No saved addresses yet. Add one in Addresses to place a delivery order."
-        wrapper.appendChild(empty)
-        return wrapper
-    }
-
-    const list = document.createElement("div")
-    list.className = "cart-addresses__list"
-
-    addresses.forEach(a => {
-        const id = String(a.id)
-        const card = document.createElement("label")
-        card.className = "cart-address-card"
-
-        const checked = selectedId && id === String(selectedId)
-        card.innerHTML = `
-            <input class="cart-address-card__radio" type="radio" name="cartAddress" value="${escapeHtml(id)}" ${checked ? "checked" : ""}>
-            <div class="cart-address-card__body">
-                <div class="cart-address-card__top">
-                    <span class="cart-address-card__chip">${escapeHtml(a.type || "Address")}</span>
-                    <strong class="cart-address-card__name">${escapeHtml(a.customer_name || "Saved address")}</strong>
-                </div>
-                <div class="cart-address-card__line">${escapeHtml(formatAddressLine(a))}</div>
-                ${a.phone ? `<div class="cart-address-card__meta">${escapeHtml(a.phone)}</div>` : ""}
-            </div>
-        `
-
-        const radio = card.querySelector("input")
-        if (radio) {
-            radio.addEventListener("change", () => {
-                localStorage.setItem("selectedAddressId", id)
-                if (typeof onChange === "function") onChange(id)
-            })
-        }
-
-        list.appendChild(card)
-    })
-
-    wrapper.appendChild(list)
-    return wrapper
-}
-
 function setMsg(text) {
     if (msgEl) msgEl.innerText = text || ""
 }
@@ -104,7 +26,7 @@ function isCustomerLoggedIn() {
 }
 
 function parseUnitPrice(priceText) {
-    const match = String(priceText).match(/₹\s*([0-9]+(?:\.[0-9]+)?)/)
+    const match = String(priceText).match(/(?:Rs\.\s*|₹\s*)([0-9]+(?:\.[0-9]+)?)/)
     return match ? Number(match[1]) : 0
 }
 
@@ -175,8 +97,8 @@ async function loadAddresses() {
 
         const savedSelected = String(localStorage.getItem("selectedAddressId") || "")
         const hasSavedSelected = savedSelected && addressCache.list.some(a => String(a.id) === savedSelected)
-        if (!hasSavedSelected) {
-            localStorage.removeItem("selectedAddressId")
+        if (!hasSavedSelected && addressCache.list[0]?.id) {
+            localStorage.setItem("selectedAddressId", String(addressCache.list[0].id))
         }
 
         return addressCache.list
@@ -189,11 +111,15 @@ async function loadAddresses() {
 
 async function getSelectedAddressId() {
     const savedSelected = String(localStorage.getItem("selectedAddressId") || "")
-    if (!savedSelected) return ""
+    if (savedSelected) return savedSelected
 
     const addresses = addressCache.loaded ? addressCache.list : await loadAddresses()
-    const ok = Array.isArray(addresses) && addresses.some(a => String(a.id) === savedSelected)
-    return ok ? savedSelected : ""
+    const firstId = addresses[0]?.id
+    if (firstId) {
+        localStorage.setItem("selectedAddressId", String(firstId))
+        return String(firstId)
+    }
+    return ""
 }
 
 async function loadSlots(storeId, selectEl) {
@@ -258,23 +184,10 @@ function changeItemQty(storeId, itemKey, delta) {
 
 function clearStoreCart(storeId) {
     const carts = getCartData()
-    if (!carts || typeof carts !== "object") {
-        renderCart()
-        return
+    if (carts && carts[storeId]) {
+        delete carts[storeId]
+        saveCartData(carts)
     }
-
-    const storeKey = String(storeId)
-    if (Object.prototype.hasOwnProperty.call(carts, storeKey)) {
-        delete carts[storeKey]
-    }
-
-    // If a key was stored with a different numeric formatting (e.g., "01" vs "1")
-    const numericKey = String(Number(storeKey))
-    if (numericKey !== storeKey && Object.prototype.hasOwnProperty.call(carts, numericKey)) {
-        delete carts[numericKey]
-    }
-
-    saveCartData(carts)
     renderCart()
 }
 
@@ -285,12 +198,7 @@ async function renderCart() {
 
     const stores = Object.keys(carts || {})
     if (stores.length === 0) {
-        container.innerHTML = `
-            <div class="cart-store">
-                <h2>Cart is empty</h2>
-                <p class="cart-item-meta">Add products from a store to see them here.</p>
-            </div>
-        `
+        container.innerHTML = '<div class="cart-store"><h2>Cart is empty</h2></div>'
         if (totalAmountEl) totalAmountEl.innerText = "₹0"
         return
     }
@@ -301,16 +209,6 @@ async function renderCart() {
     for (const storeId of stores) {
         storeSettings[storeId] = await fetchStore(storeId)
     }
-
-    const storeDeliveryType = {}
-    const needsDeliveryAddress = stores.some((storeId) => {
-        const storeData = storeSettings[storeId] || null
-        const deliveryAvailable = !!storeData?.delivery_available
-        const pickupAvailable = !!storeData?.pickup_available
-        const deliveryType = deliveryAvailable ? "delivery" : (pickupAvailable ? "pickup" : "delivery")
-        storeDeliveryType[storeId] = deliveryType
-        return deliveryType === "delivery"
-    })
 
     let grandTotal = 0
 
@@ -323,7 +221,9 @@ async function renderCart() {
         const storeData = storeSettings[storeId] || null
         const storeName = getStoreDisplayName(storeCart, storeData)
 
-        const deliveryType = storeDeliveryType[storeId] || "delivery"
+        const deliveryAvailable = !!storeData?.delivery_available
+        const pickupAvailable = !!storeData?.pickup_available
+        const deliveryType = deliveryAvailable ? "delivery" : (pickupAvailable ? "pickup" : "delivery")
 
         let storeTotal = 0
         items.forEach(item => {
@@ -345,7 +245,7 @@ async function renderCart() {
         const header = document.createElement("div")
         header.className = "cart-store-header"
         header.innerHTML = `
-            <h2>${storeName}<span>${items.length} item(s)${deliveryType === "pickup" ? " • Pickup only" : ""}</span></h2>
+            <h2>${storeName}<span>${items.length} item(s)${deliveryType === "pickup" ? " | Pickup only" : ""}</span></h2>
         `
 
         const clearBtn = document.createElement("button")
@@ -403,9 +303,11 @@ async function renderCart() {
         breakdown.className = "cart-store-breakdown"
         breakdown.innerHTML = `
             <div><span>Items total</span><strong>${formatRupees(storeTotal)}</strong></div>
+            <div><span>Delivery fee</span><strong>${formatRupees(deliveryFee)}</strong></div>
         `
         section.appendChild(breakdown)
 
+        let slotSelect = null
         if (deliveryType === "pickup") {
             const slotRow = document.createElement("div")
             slotRow.className = "cart-store-slot"
@@ -414,7 +316,7 @@ async function renderCart() {
             slotLabel.innerText = "Pickup Time Slot"
             slotLabel.setAttribute("for", `slot-${storeId}`)
 
-            const slotSelect = document.createElement("select")
+            slotSelect = document.createElement("select")
             slotSelect.id = `slot-${storeId}`
             await loadSlots(storeId, slotSelect)
 
@@ -432,32 +334,9 @@ async function renderCart() {
         btn.className = "cart-place-btn"
         btn.type = "button"
         btn.innerText = "Place Order"
-
-        const updatePlaceBtnState = () => {
-            if (deliveryType === "delivery") {
-                const selected = String(localStorage.getItem("selectedAddressId") || "")
-                const ok = !!(selected && addressCache.list.some(a => String(a.id) === selected))
-                btn.disabled = !ok
-                btn.title = ok ? "" : "Select a saved address to place the order"
-                return
-            }
-
-            if (deliveryType === "pickup") {
-                const ok = !!(slotSelect && String(slotSelect.value || "").trim())
-                btn.disabled = !ok
-                btn.title = ok ? "" : "Select a pickup time slot to place the order"
-                return
-            }
-
-            btn.disabled = false
-            btn.title = ""
-        }
-        if (slotSelect) slotSelect.addEventListener("change", updatePlaceBtnState)
-        updatePlaceBtnState()
-
-        btn.onclick = async () => {
-            setMsg("")
-            await placeOrder(storeId, { deliveryType, deliveryFee, slotSelect })
+        btn.onclick = () => {
+            const storeNameParam = storeName ? `&storeName=${encodeURIComponent(storeName)}` : ""
+            window.location.href = `order-placed.html?storeId=${encodeURIComponent(storeId)}${storeNameParam}`
         }
         section.appendChild(btn)
 
@@ -501,7 +380,7 @@ async function placeOrder(storeId, options) {
     if (deliveryType === "delivery") {
         addressId = await getSelectedAddressId()
         if (!addressId) {
-            setMsg("Please select a saved address before placing the order")
+            setMsg("Please add an address from the Addresses page before placing a delivery order")
             return
         }
     }
@@ -540,8 +419,8 @@ async function placeOrder(storeId, options) {
             return
         }
 
+        setMsg("Order placed successfully")
         clearStoreCart(storeId)
-        window.location.href = "order-placed.html"
     } catch {
         setMsg("Order failed")
     }

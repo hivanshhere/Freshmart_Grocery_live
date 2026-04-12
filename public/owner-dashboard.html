@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Owner Dashboard</title>
 	<link rel="stylesheet" href="storestyle.css">
@@ -27,8 +28,8 @@
 					<h2>My Store</h2>
 				</div>
 				<div class="panel-card__body">
-					<p><strong>Store:</strong> <span id="storeDisplayName">Loading…</span></p>
-					<p><strong>Store ID:</strong> <span id="storeDisplayId">—</span></p>
+					<p><strong>Store:</strong> <span id="storeDisplayName">Loading...</span></p>
+					<p><strong>Store ID:</strong> <span id="storeDisplayId">-</span></p>
 
 					<div id="createStoreSection" style="display:none;">
 						<div class="form-field">
@@ -55,8 +56,7 @@
 				</div>
 
 				<div class="panel-card__body">
-
-					<!-- 🔥 FORM START -->
+					<!-- FORM START -->
 					<form id="productForm" enctype="multipart/form-data">
 
 						<div class="form-field">
@@ -98,7 +98,7 @@
 							</div>
 						</div>
 
-						<!-- 🔥 NEW IMAGE FIELD -->
+						<!-- IMAGE FIELD -->
 						<div class="form-field">
 							<label for="pimage">Product Image</label>
 							<input type="file" id="pimage" accept="image/*">
@@ -109,8 +109,7 @@
 						</button>
 
 					</form>
-					<!-- 🔥 FORM END -->
-
+					<!-- FORM END -->
 				</div>
 			</div>
 
@@ -121,7 +120,6 @@
 					<p class="help-text" style="margin:8px 0 0;">These settings are shown to customers during checkout.</p>
 				</div>
 				<div class="panel-card__body">
-					<!-- SAME AS BEFORE (NO CHANGE) -->
 					<div class="delivery-settings">
 						<div class="delivery-settings__row">
 
@@ -166,7 +164,6 @@
 
 		</section>
 
-		<!-- PRODUCTS -->
 		<section style="margin-top:26px;">
 			<h2 style="margin:0 0 12px; color:#222;">My Products</h2>
 			<div class="store-container" id="ownerProductList"></div>

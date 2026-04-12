@@ -80,14 +80,14 @@ window.onload = function () {
 
             div.innerHTML = `
                 <h2 class="store-card__title">${store.store_name}</h2>
-                <p class="store-card__rating">4.2 rating • Nearby</p>
+                <p class="store-card__rating">4.2 rating &bull; Nearby</p>
                 <div class="store-card__badges">
                     <span class="store-badge ${store.delivery_available ? "store-badge--on" : "store-badge--off"}">Delivery ${store.delivery_available ? "On" : "Off"}</span>
                     <span class="store-badge ${store.pickup_available ? "store-badge--on" : "store-badge--off"}">Pickup ${store.pickup_available ? "On" : "Off"}</span>
                 </div>
                 ${store.delivery_available ? `
                     <p class="store-card__meta">
-                        Delivery fee: ₹${Number(store.delivery_charge || 0)} • Free above ₹${Number(store.min_order_free_delivery || 0)}
+                        Delivery fee: ₹${Number(store.delivery_charge || 0)} &bull; Free above ₹${Number(store.min_order_free_delivery || 0)}
                     </p>
                 ` : ""}
             `;

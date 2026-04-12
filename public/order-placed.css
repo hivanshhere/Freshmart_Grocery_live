@@ -3,7 +3,7 @@
 .order-placed-page{
     max-width:1000px;
     margin:0 auto;
-    padding:40px;
+    padding:48px 20px;
     display:flex;
     justify-content:center;
 }
@@ -11,66 +11,49 @@
 .order-card{
     width:100%;
     max-width:640px;
-    background:linear-gradient(180deg, rgba(255,255,255,0.98), rgba(241,252,245,0.96));
+    background:rgba(255,255,255,0.90);
+    backdrop-filter:blur(10px);
     padding:34px 28px;
     border-radius:24px;
-    box-shadow:0 20px 40px rgba(17,38,28,0.12);
+    box-shadow:0 18px 36px rgba(19,54,31,0.12);
+    border:1px solid rgba(19,54,31,0.08);
     display:flex;
     flex-direction:column;
     align-items:center;
     text-align:center;
-    border:1px solid rgba(39,174,96,0.10);
 }
 
 .order-badge{
-    width:54px;
-    height:54px;
+    width:64px;
+    height:64px;
     border-radius:999px;
-    background:linear-gradient(135deg, #27ae60, #209452);
+    background:linear-gradient(135deg, #2fb463 0%, #1f7a45 100%);
     color:#fff;
     display:flex;
     align-items:center;
     justify-content:center;
-    font-weight:bold;
-    font-size:22px;
-    margin-bottom:14px;
-}
-
-.order-tag{
-    margin:0 0 8px;
-    font-size:12px;
-    letter-spacing:0.16em;
-    text-transform:uppercase;
     font-weight:800;
-    color:#1f8f4d;
+    font-size:28px;
+    margin-bottom:18px;
+    box-shadow:0 16px 28px rgba(39,153,84,0.20);
 }
 
 .order-title{
-    margin:0 0 8px 0;
-    font-size:30px;
+    margin:0 0 10px 0;
+    font-size:32px;
+    text-transform:capitalize;
     color:#17311f;
 }
 
 .order-subtitle{
     margin:0 0 18px 0;
-    max-width:470px;
-    color:#33423a;
+    color:#5f6c76;
+    font-size:16px;
     line-height:1.6;
 }
 
 .order-again-btn{
-    background:linear-gradient(135deg, #27ae60, #209452);
-    color:white;
-    border:none;
-    padding:12px 22px;
-    border-radius:999px;
-    cursor:pointer;
-    font-weight:bold;
-    box-shadow:0 10px 22px rgba(39,174,96,0.20);
-}
-
-.order-again-btn:hover{
-    background:#219150;
+    min-width:180px;
 }
 
 @media (max-width: 700px){
@@ -80,5 +63,10 @@
 
     .order-card{
         padding:22px 18px;
+        border-radius:18px;
+    }
+
+    .order-title{
+        font-size:26px;
     }
 }
