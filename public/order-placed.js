@@ -3,10 +3,15 @@
         window.location.href = "stores.html";
     }
 
+    function goToOrders() {
+        window.location.href = "customer-orders.html";
+    }
+
     window.addEventListener("DOMContentLoaded", function () {
         const btn = document.getElementById("orderAgainBtn");
-        if (!btn) return;
+        const ordersBtn = document.getElementById("viewOrdersBtn");
 
-        btn.addEventListener("click", goToStores);
+        if (btn) btn.addEventListener("click", goToStores);
+        if (ordersBtn) ordersBtn.addEventListener("click", goToOrders);
     });
 })();

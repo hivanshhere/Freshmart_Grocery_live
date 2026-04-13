@@ -56,6 +56,20 @@
     min-width:180px;
 }
 
+.order-card__actions{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:12px;
+}
+
+.order-again-btn--secondary{
+    background:#eef7f1;
+    color:#17311f;
+    box-shadow:none;
+    border:1px solid rgba(19,54,31,0.10);
+}
+
 @media (max-width: 700px){
     .order-placed-page{
         padding:26px 16px;
@@ -68,5 +82,13 @@
 
     .order-title{
         font-size:26px;
+    }
+
+    .order-card__actions{
+        width:100%;
+    }
+
+    .order-again-btn{
+        width:100%;
     }
 }

@@ -17,11 +17,35 @@ const editStoreNameInput = document.getElementById("editStoreName");
 const addProductBtn = document.getElementById("addProductBtn");
 const ownerProductListEl = document.getElementById("ownerProductList");
 
-/* 🔥 NEW: delivery inputs */
+/*  NEW: delivery inputs */
 const deliveryAvailableEl = document.getElementById("deliveryAvailable");
 const deliveryChargeEl = document.getElementById("deliveryCharge");
 const minOrderEl = document.getElementById("minOrder");
 const pickupAvailableEl = document.getElementById("pickupAvailable");
+
+app.get("/owner/orders/:store_id", async (req, res) => {
+    const { store_id } = req.params;
+
+    try {
+        const [orders] = await db.query(
+            "SELECT * FROM orders WHERE store_id = ?",
+            [store_id]
+        );
+
+        for (let order of orders) {
+            const [items] = await db.query(
+                "SELECT * FROM order_items WHERE order_id = ?",
+                [order.id]
+            );
+            order.items = items;
+        }
+
+        res.json(orders);
+
+    } catch (err) {
+        res.status(500).json({ error: "error" });
+    }
+});
 
 let currentStore = null;
 
@@ -245,6 +269,7 @@ async function addProduct() {
         setMsg(e.message);
     }
 }
+
 
 async function removeProduct(productId) {
     if (!currentStore) return;

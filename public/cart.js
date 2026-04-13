@@ -1,6 +1,7 @@
 const container = document.getElementById("cartItems")
 const msgEl = document.getElementById("msg")
 const totalAmountEl = document.getElementById("totalAmount")
+const placeAllOrdersBtn = document.getElementById("placeAllOrdersBtn")
 
 const addressCache = {
     loaded: false,
@@ -9,6 +10,13 @@ const addressCache = {
 
 function setMsg(text) {
     if (msgEl) msgEl.innerText = text || ""
+}
+
+function setPlaceAllDisabled(disabled) {
+    if (!placeAllOrdersBtn) return
+    placeAllOrdersBtn.disabled = !!disabled
+    placeAllOrdersBtn.style.opacity = disabled ? "0.6" : "1"
+    placeAllOrdersBtn.style.cursor = disabled ? "not-allowed" : "pointer"
 }
 
 function getCartData() {
@@ -200,9 +208,11 @@ async function renderCart() {
     if (stores.length === 0) {
         container.innerHTML = '<div class="cart-store"><h2>Cart is empty</h2></div>'
         if (totalAmountEl) totalAmountEl.innerText = "₹0"
+        setPlaceAllDisabled(true)
         return
     }
 
+    setPlaceAllDisabled(false)
     await loadAddresses()
 
     const storeSettings = {}
@@ -334,30 +344,27 @@ async function renderCart() {
         btn.className = "cart-place-btn"
         btn.type = "button"
         btn.innerText = "Place Order"
-        btn.onclick = () => {
-            const storeNameParam = storeName ? `&storeName=${encodeURIComponent(storeName)}` : ""
-            window.location.href = `order-placed.html?storeId=${encodeURIComponent(storeId)}${storeNameParam}`
-        }
+        btn.onclick = () => placeOrder(storeId, { deliveryType, deliveryFee, slotSelect, storeName })
         section.appendChild(btn)
 
         container.appendChild(section)
     }
 
-    if (totalAmountEl) totalAmountEl.innerText = `${formatRupees(grandTotal)}`
+    if (totalAmountEl) totalAmountEl.innerText = formatRupees(grandTotal)
 }
 
 async function placeOrder(storeId, options) {
     const token = localStorage.getItem("authToken")
     if (!token) {
         setMsg("Please login first")
-        return
+        return false
     }
 
     const carts = getCartData()
     const items = normalizeStoreItems(carts[storeId])
     if (items.length === 0) {
         setMsg("Cart is empty")
-        return
+        return false
     }
 
     const deliveryType = options?.deliveryType || "delivery"
@@ -368,11 +375,11 @@ async function placeOrder(storeId, options) {
     if (storeData) {
         if (deliveryType === "delivery" && !storeData.delivery_available) {
             setMsg("This store does not offer delivery")
-            return
+            return false
         }
         if (deliveryType === "pickup" && !storeData.pickup_available) {
             setMsg("This store does not offer pickup")
-            return
+            return false
         }
     }
 
@@ -381,13 +388,13 @@ async function placeOrder(storeId, options) {
         addressId = await getSelectedAddressId()
         if (!addressId) {
             setMsg("Please add an address from the Addresses page before placing a delivery order")
-            return
+            return false
         }
     }
 
     if (deliveryType === "pickup" && !slotId) {
         setMsg("Please select a pickup time slot")
-        return
+        return false
     }
 
     const payload = {
@@ -416,14 +423,59 @@ async function placeOrder(storeId, options) {
         const data = await res.json().catch(() => null)
         if (!res.ok) {
             setMsg(data?.message || "Order failed")
-            return
+            return false
         }
 
         setMsg("Order placed successfully")
         clearStoreCart(storeId)
+        if (options?.storeName) {
+            const storeNameParam = `&storeName=${encodeURIComponent(options.storeName)}`
+            window.location.href = `order-placed.html?storeId=${encodeURIComponent(storeId)}${storeNameParam}`
+        }
+        return true
     } catch {
         setMsg("Order failed")
+        return false
     }
+}
+
+async function placeAllOrders() {
+    const carts = getCartData()
+    const storeIds = Object.keys(carts || {})
+    if (storeIds.length === 0) {
+        setMsg("Cart is empty")
+        return
+    }
+
+    for (const storeId of storeIds) {
+        const storeData = await fetchStore(storeId)
+        const deliveryType = storeData?.delivery_available ? "delivery" : (storeData?.pickup_available ? "pickup" : "delivery")
+        const items = normalizeStoreItems(carts[storeId])
+
+        let storeTotal = 0
+        items.forEach(item => {
+            storeTotal += parseUnitPrice(item.price) * item.qty
+        })
+
+        let deliveryFee = 0
+        if (deliveryType === "delivery" && storeData) {
+            const freeAbove = Number(storeData.min_order_free_delivery) || 0
+            if (storeTotal < freeAbove) {
+                deliveryFee = Number(storeData.delivery_charge) || 0
+            }
+        }
+
+        const ok = await placeOrder(storeId, {
+            deliveryType,
+            deliveryFee,
+            storeName: getStoreDisplayName(carts[storeId], storeData)
+        })
+        if (!ok) return
+    }
+}
+
+if (placeAllOrdersBtn) {
+    placeAllOrdersBtn.onclick = placeAllOrders
 }
 
 renderCart()

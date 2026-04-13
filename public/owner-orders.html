@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Store Orders</title>
+    <link rel="stylesheet" href="storestyle.css">
+    <link rel="stylesheet" href="orders.css">
+</head>
+<body>
+
+<header class="main-header">
+    <h1>Store Orders</h1>
+    <nav class="nav-menu">
+        <a href="owner-dashboard.html">Dashboard</a>
+        <a href="index.html">Home</a>
+        <a href="#" id="ownerLogoutBtn">Logout</a>
+    </nav>
+</header>
+
+<main class="orders-shell">
+    <section class="orders-hero">
+        <div>
+            <p class="orders-hero__eyebrow">Dedicated workspace</p>
+            <h2>Manage incoming orders</h2>
+            <p>Review each order in a cleaner space, update its status, and delete old cards when you no longer want them visible.</p>
+        </div>
+    </section>
+
+    <div id="ownerOrdersFeedback"></div>
+
+    <section class="orders-summary" id="ownerOrdersSummary"></section>
+
+    <section class="orders-list" id="ownerOrdersList"></section>
+</main>
+
+<script src="owner-orders.js"></script>
+</body>
+</html>
