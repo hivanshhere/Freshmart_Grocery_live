@@ -128,9 +128,41 @@ function renderOrders(orders) {
                     <span>Items</span>
                     <div class="order-items">${itemsHtml}</div>
                 </div>
+
+                <div class="order-card__actions">
+                    <button type="button" class="orders-btn orders-btn--danger" onclick="deleteCustomerOrder(${order.id})">Delete</button>
+                </div>
             </article>
         `;
     }).join("");
+}
+
+async function deleteCustomerOrder(orderId) {
+    const confirmed = window.confirm(`Delete order #${orderId}?`);
+    if (!confirmed) return;
+
+    try {
+        const res = await fetch(`${API_BASE}/user/orders/${orderId}`, {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${customerToken}` }
+        });
+
+        if (res.status === 401) {
+            localStorage.clear();
+            window.location.href = "login.html";
+            return;
+        }
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+            throw new Error(data?.message || `Could not delete order (HTTP ${res.status})`);
+        }
+
+        showFeedback(data?.message || `Order #${orderId} deleted.`, "success");
+        await loadCustomerOrders();
+    } catch (e) {
+        showFeedback(e.message, "error");
+    }
 }
 
 async function loadCustomerOrders() {
@@ -149,3 +181,5 @@ async function loadCustomerOrders() {
 
 loadCustomerOrders();
 setInterval(loadCustomerOrders, 10000);
+
+window.deleteCustomerOrder = deleteCustomerOrder;

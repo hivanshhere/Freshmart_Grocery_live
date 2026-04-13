@@ -652,6 +652,22 @@ app.get("/user/orders", requireAuth, requireCustomer, asyncHandler(async (req, r
     res.json(orders);
 }));
 
+app.delete("/user/orders/:orderId", requireAuth, requireCustomer, asyncHandler(async (req, res) => {
+    const orderId = Number(req.params.orderId);
+    if (!Number.isFinite(orderId)) return res.status(400).json({ message: "Invalid order id" });
+
+    const [orders] = await dbp.query(
+        "SELECT id FROM orders WHERE id = ? AND customer_id = ?",
+        [orderId, req.auth.user.id]
+    );
+    if (!orders[0]) return res.status(404).json({ message: "Order not found" });
+
+    await dbp.query("DELETE FROM order_items WHERE order_id = ?", [orderId]);
+    await dbp.query("DELETE FROM orders WHERE id = ? AND customer_id = ?", [orderId, req.auth.user.id]);
+
+    res.json({ message: "Order deleted" });
+}));
+
 // ================= ERROR HANDLER =================
 app.use((err, req, res, next) => {
     console.error(err);
