@@ -1,13 +1,21 @@
 require("dotenv").config();
 
-const express = require("express");
+const express = require("express"); 
 const cors = require("cors");
+const multer = require("multer");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const mysql2 = require("mysql2");
-const mysql = require("mysql2/promise");
-const multer = require("multer");
+
+//start 
+const mongoose = require("mongoose");
+const User = require("./models/User");
+const Session = require("./models/Session");
+
+const Store = require("./models/Store");
+const Product = require("./models/Product");
+
+const Order = require("./models/Order");
 
 const app = express();
 app.use(cors());
@@ -18,17 +26,6 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 
 app.use("/uploads", express.static(uploadsDir));
 app.use(express.static("public"));
-
-const PORT = Number(process.env.PORT) || 3000;
-
-const DB_HOST = process.env.DB_HOST;
-const DB_PORT = Number(process.env.DB_PORT);
-const DB_USER = process.env.DB_USER;
-const DB_PASSWORD = process.env.DB_PASSWORD;
-const DB_NAME = process.env.DB_NAME;
-
-let db;
-let dbp;
 
 const upload = multer({
     storage: multer.diskStorage({
@@ -67,167 +64,29 @@ function newToken() {
     return crypto.randomBytes(32).toString("hex");
 }
 
-async function ensureDatabaseExists() {
-    const conn = await mysql.createConnection({
-        host: DB_HOST,
-        port: DB_PORT,
-        user: DB_USER,
-        password: DB_PASSWORD
-    });
-    await conn.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\``);
-    await conn.end();
-}
-
-function initPool() {
-    db = mysql2.createPool({
-        host: DB_HOST,
-        port: DB_PORT,
-        user: DB_USER,
-        password: DB_PASSWORD,
-        database: DB_NAME,
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0
-    });
-    dbp = db.promise();
-}
-
-async function initDb() {
-    await dbp.query(`
-        CREATE TABLE IF NOT EXISTS users (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(100) NOT NULL,
-            email VARCHAR(100) NOT NULL,
-            password VARCHAR(100) NOT NULL,
-            role VARCHAR(20) NOT NULL
-        )
-    `);
-
-    await dbp.query(`
-        CREATE TABLE IF NOT EXISTS user_sessions (
-            token VARCHAR(128) PRIMARY KEY,
-            user_id INT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    `);
-
-    await dbp.query(`
-        CREATE TABLE IF NOT EXISTS stores (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            owner_id INT NOT NULL,
-            store_name VARCHAR(100) NOT NULL,
-            delivery_available BOOLEAN DEFAULT 0,
-            delivery_charge INT DEFAULT 0,
-            min_order_free_delivery INT DEFAULT 0,
-            pickup_available BOOLEAN DEFAULT 1
-        )
-    `);
-
-    await dbp.query(`
-        CREATE TABLE IF NOT EXISTS products (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            store_id INT NOT NULL,
-            name VARCHAR(100) NOT NULL,
-            price DECIMAL(10,2) NOT NULL,
-            quantity DECIMAL(10,2) NOT NULL,
-            unit VARCHAR(20) NOT NULL,
-            description VARCHAR(255) DEFAULT '',
-            image VARCHAR(255) DEFAULT NULL
-        )
-    `);
-
-    try { await dbp.query("ALTER TABLE products ADD COLUMN description VARCHAR(255) DEFAULT ''"); } catch {}
-    try { await dbp.query("ALTER TABLE products ADD COLUMN image VARCHAR(255) DEFAULT NULL"); } catch {}
-
-    await dbp.query(`
-        CREATE TABLE IF NOT EXISTS orders (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            customer_id INT NOT NULL,
-            store_id INT NOT NULL,
-            total_amount DECIMAL(10,2) NOT NULL,
-            status VARCHAR(20) NOT NULL DEFAULT 'placed',
-            delivery_type VARCHAR(20) NOT NULL,
-            address_id INT,
-            slot_id INT,
-            delivery_fee INT DEFAULT 0,
-            owner_deleted TINYINT(1) NOT NULL DEFAULT 0,
-            customer_deleted TINYINT(1) NOT NULL DEFAULT 0,
-            owner_order_number INT DEFAULT NULL,
-            customer_order_number INT DEFAULT NULL,
-            owner_notification_pending TINYINT(1) NOT NULL DEFAULT 0
-        )
-    `);
-
-    // Backward-compatible migrations (if the table existed before new columns were added)
-    try { await dbp.query("ALTER TABLE orders ADD COLUMN address_id INT"); } catch {}
-    try { await dbp.query("ALTER TABLE orders ADD COLUMN slot_id INT"); } catch {}
-    try { await dbp.query("ALTER TABLE orders ADD COLUMN delivery_fee INT DEFAULT 0"); } catch {}
-    try { await dbp.query("ALTER TABLE orders ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'placed'"); } catch {}
-    try { await dbp.query("ALTER TABLE orders MODIFY COLUMN status VARCHAR(20) NOT NULL DEFAULT 'placed'"); } catch {}
-    try { await dbp.query("ALTER TABLE orders ADD COLUMN owner_deleted TINYINT(1) NOT NULL DEFAULT 0"); } catch {}
-    try { await dbp.query("ALTER TABLE orders ADD COLUMN customer_deleted TINYINT(1) NOT NULL DEFAULT 0"); } catch {}
-    try { await dbp.query("ALTER TABLE orders ADD COLUMN owner_order_number INT DEFAULT NULL"); } catch {}
-    try { await dbp.query("ALTER TABLE orders ADD COLUMN customer_order_number INT DEFAULT NULL"); } catch {}
-    try { await dbp.query("ALTER TABLE orders ADD COLUMN owner_notification_pending TINYINT(1) NOT NULL DEFAULT 0"); } catch {}
-    try { await dbp.query("UPDATE orders SET owner_order_number = id WHERE owner_order_number IS NULL OR owner_order_number = 0"); } catch {}
-    try { await dbp.query("UPDATE orders SET customer_order_number = id WHERE customer_order_number IS NULL OR customer_order_number = 0"); } catch {}
-
-    await dbp.query(`
-        CREATE TABLE IF NOT EXISTS order_items (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            order_id INT NOT NULL,
-            product_name VARCHAR(100) NOT NULL,
-            unit_price DECIMAL(10,2) NOT NULL,
-            qty INT NOT NULL,
-            line_total DECIMAL(10,2) NOT NULL DEFAULT 0
-        )
-    `);
-    try { await dbp.query("ALTER TABLE order_items ADD COLUMN line_total DECIMAL(10,2) NOT NULL DEFAULT 0"); } catch {}
-
-    await dbp.query(`
-        CREATE TABLE IF NOT EXISTS time_slots (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            store_id INT NOT NULL,
-            slot_time VARCHAR(50) NOT NULL
-        )
-    `);
-
-    await dbp.query(`
-        CREATE TABLE IF NOT EXISTS user_addresses (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            type VARCHAR(20) NOT NULL,
-            address_line VARCHAR(255) NOT NULL,
-            customer_name VARCHAR(100),
-            phone VARCHAR(20),
-            house VARCHAR(120),
-            area VARCHAR(160),
-            landmark VARCHAR(160),
-            city VARCHAR(80),
-            pincode VARCHAR(10)
-        )
-    `);
-
-    try { await dbp.query("ALTER TABLE users ADD UNIQUE KEY uniq_users_email (email)"); } catch {}
-    try { await dbp.query("ALTER TABLE stores ADD UNIQUE KEY uniq_stores_owner (owner_id)"); } catch {}
-    try { await dbp.query("ALTER TABLE time_slots ADD UNIQUE KEY uniq_time_slot (store_id, slot_time)"); } catch {}
-}
 
 async function requireAuth(req, res, next) {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ message: "Login required" });
+  const token = req.headers.authorization?.split(" ")[1];
 
-    const [rows] = await dbp.query(
-        `SELECT us.token, u.id, u.name, u.email, u.role
-         FROM user_sessions us
-         JOIN users u ON u.id = us.user_id
-         WHERE us.token=?`,
-        [token]
-    );
+  if (!token) {
+    return res.status(401).json({ message: "Login required" });
+  }
 
-    if (!rows[0]) return res.status(401).json({ message: "Invalid session" });
-    req.auth = { token, user: rows[0] };
-    next();
+  const session = await Session.findOne({ token });
+
+  if (!session) {
+    return res.status(401).json({ message: "Invalid session" });
+  }
+
+  const user = await User.findById(session.user_id);
+
+  if (!user) {
+    return res.status(401).json({ message: "User not found" });
+  }
+
+  req.auth = { token, user };
+
+  next();
 }
 
 function requireOwner(req, res, next) {
@@ -243,485 +102,294 @@ function requireCustomer(req, res, next) {
 }
 
 async function getOwnerStore(ownerId) {
-    const [rows] = await dbp.query("SELECT * FROM stores WHERE owner_id=?", [ownerId]);
-    return rows[0] || null;
-}
-
-async function attachItemsToOrders(orders) {
-    for (const order of orders) {
-        const [items] = await dbp.query(
-            "SELECT id, order_id, product_name, unit_price, qty, line_total FROM order_items WHERE order_id = ? ORDER BY id ASC",
-            [order.id]
-        );
-        order.items = items;
-    }
-    return orders;
-}
-
-async function getNextOwnerOrderNumber(storeId) {
-    const [rows] = await dbp.query(
-        "SELECT COALESCE(MAX(owner_order_number), 0) AS max_order_number FROM orders WHERE store_id = ? AND owner_deleted = 0",
-        [storeId]
-    );
-    return (Number(rows[0]?.max_order_number) || 0) + 1;
-}
-
-async function getNextCustomerOrderNumber(customerId) {
-    const [rows] = await dbp.query(
-        "SELECT COALESCE(MAX(customer_order_number), 0) AS max_order_number FROM orders WHERE customer_id = ? AND customer_deleted = 0",
-        [customerId]
-    );
-    return (Number(rows[0]?.max_order_number) || 0) + 1;
-}
-
-async function purgeOrderIfHiddenEverywhere(orderId) {
-    const [rows] = await dbp.query(
-        "SELECT owner_deleted, customer_deleted FROM orders WHERE id = ?",
-        [orderId]
-    );
-    const order = rows[0];
-    if (!order) return;
-
-    if (Number(order.owner_deleted) === 1 && Number(order.customer_deleted) === 1) {
-        await dbp.query("DELETE FROM order_items WHERE order_id = ?", [orderId]);
-        await dbp.query("DELETE FROM orders WHERE id = ?", [orderId]);
-    }
+  return await Store.findOne({ owner_id: ownerId });
 }
 
 // ================= AUTH =================
 app.post("/auth/register-customer", async (req, res) => {
-    const { name, email, password } = req.body || {};
-    if (!name || !email || !password) return res.status(400).json({ message: "Missing fields" });
+  const { name, email, password } = req.body || {};
 
-    try {
-        const [result] = await dbp.query(
-            "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, 'customer')",
-            [name, email, password]
-        );
+  if (!name || !email || !password) {
+    return res.status(400).json({ message: "Missing fields" });
+  }
 
-        const userId = result.insertId;
-        const token = newToken();
-        await dbp.query("INSERT INTO user_sessions (token, user_id) VALUES (?, ?)", [token, userId]);
+  try {
+    const existing = await User.findOne({ email });
 
-        res.json({ token, user: { id: userId, name, email, role: "customer" } });
-    } catch (e) {
-        if (String(e?.message || "").toLowerCase().includes("duplicate")) {
-            return res.status(409).json({ message: "Email already registered" });
-        }
-        res.status(500).json({ message: "Server error" });
+    if (existing) {
+      return res.status(409).json({ message: "Email already registered" });
     }
-});
 
-app.post("/auth/register-owner", asyncHandler(async (req, res) => {
-    const { name, email, password, store_name } = req.body || {};
-    if (!name || !email || !password || !store_name) return res.status(400).json({ message: "Missing fields" });
-
-    const storeNameCaps = String(store_name).trim().toUpperCase();
-    if (!storeNameCaps) return res.status(400).json({ message: "Missing fields" });
-
-    try {
-        const [userResult] = await dbp.query(
-            "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, 'owner')",
-            [name, email, password]
-        );
-
-        const ownerId = userResult.insertId;
-        const [storeResult] = await dbp.query(
-            "INSERT INTO stores (owner_id, store_name, delivery_available, delivery_charge, min_order_free_delivery, pickup_available) VALUES (?, ?, 0, 0, 0, 1)",
-            [ownerId, storeNameCaps]
-        );
-
-        const store = {
-            id: storeResult.insertId,
-            owner_id: ownerId,
-            store_name: storeNameCaps,
-            delivery_available: 0,
-            delivery_charge: 0,
-            min_order_free_delivery: 0,
-            pickup_available: 1
-        };
-
-        const token = newToken();
-        await dbp.query("INSERT INTO user_sessions (token, user_id) VALUES (?, ?)", [token, ownerId]);
-
-        res.json({ token, user: { id: ownerId, name, email, role: "owner" }, store });
-    } catch (e) {
-        if (String(e?.message || "").toLowerCase().includes("duplicate")) {
-            return res.status(409).json({ message: "Email already registered" });
-        }
-        res.status(500).json({ message: "Server error" });
-    }
-}));
-
-app.post("/auth/login", async (req, res) => {
-    const { email, password } = req.body || {};
-    if (!email || !password) return res.status(400).json({ message: "Missing fields" });
-
-    const [rows] = await dbp.query(
-        "SELECT * FROM users WHERE email=? AND password=?",
-        [email, password]
-    );
-
-    if (!rows[0]) return res.status(401).json({ message: "Invalid credentials" });
+    const user = await User.create({
+      name,
+      email,
+      password,
+      role: "customer"
+    });
 
     const token = newToken();
-    await dbp.query("INSERT INTO user_sessions (token, user_id) VALUES (?, ?)", [token, rows[0].id]);
 
-    const u = userDto(rows[0]);
-    const store = u?.role === "owner" ? await getOwnerStore(u.id) : null;
-    res.json({ token, user: u, store });
+    await Session.create({
+      token,
+      user_id: user._id
+    });
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        name,
+        email,
+        role: "customer"
+      }
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
-app.post("/auth/logout", asyncHandler(async (req, res) => {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.json({ message: "Logged out" });
-    await dbp.query("DELETE FROM user_sessions WHERE token=?", [token]);
-    res.json({ message: "Logged out" });
-}));
+app.post("/auth/register-owner", async (req, res) => {
+  const { name, email, password, store_name } = req.body || {};
+
+  if (!name || !email || !password || !store_name) {
+    return res.status(400).json({ message: "Missing fields" });
+  }
+
+  try {
+    const existing = await User.findOne({ email });
+
+    if (existing) {
+      return res.status(409).json({ message: "Email already registered" });
+    }
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      role: "owner"
+    });
+
+    const store = await Store.create({
+      owner_id: user._id,
+      store_name,
+      delivery_available: false,
+      delivery_charge: 0,
+      min_order_free_delivery: 0,
+      pickup_available: true
+    });
+
+    const token = newToken();
+
+    await Session.create({
+      token,
+      user_id: user._id
+    });
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        name,
+        email,
+        role: "owner"
+      },
+      store
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+app.post("/auth/login", async (req, res) => {
+  const { email, password } = req.body || {};
+
+  if (!email || !password) {
+    return res.status(400).json({ message: "Missing fields" });
+  }
+
+  const user = await User.findOne({ email, password });
+
+  if (!user) {
+    return res.status(401).json({ message: "Invalid credentials" });
+  }
+
+  const token = newToken();
+
+  await Session.create({
+    token,
+    user_id: user._id
+  });
+
+  res.json({
+    token,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    }
+  });
+});
+
+
+app.post("/auth/logout", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+
+  if (token) {
+    await Session.deleteOne({ token });
+  }
+
+  res.json({ message: "Logged out" });
+});
 
 // ================= PUBLIC CUSTOMER-FACING APIs =================
-app.get("/stores", asyncHandler(async (req, res) => {
-    const [rows] = await dbp.query(
-        "SELECT id, store_name, delivery_available, delivery_charge, min_order_free_delivery, pickup_available FROM stores ORDER BY id DESC"
-    );
-    res.json(rows);
-}));
+app.get("/stores", async (req, res) => {
+  const stores = await Store.find().sort({ _id: -1 });
+  res.json(stores);
+});
 
-app.get("/store/:storeId", asyncHandler(async (req, res) => {
-    const storeId = Number(req.params.storeId);
-    if (!Number.isFinite(storeId)) return res.status(400).json({ message: "Invalid store id" });
+app.get("/store/:storeId", async (req, res) => {
+  const store = await Store.findById(req.params.storeId);
 
-    const [rows] = await dbp.query(
-        "SELECT id, owner_id, store_name, delivery_available, delivery_charge, min_order_free_delivery, pickup_available FROM stores WHERE id=?",
-        [storeId]
-    );
-    if (!rows[0]) return res.status(404).json({ message: "Store not found" });
-    res.json(rows[0]);
-}));
+  if (!store) {
+    return res.status(404).json({ message: "Store not found" });
+  }
 
-app.get("/products/:storeId", asyncHandler(async (req, res) => {
-    const storeId = Number(req.params.storeId);
-    if (!Number.isFinite(storeId)) return res.status(400).json({ message: "Invalid store id" });
+  res.json(store);
+});
 
-    const [rows] = await dbp.query(
-        "SELECT id, store_id, name, price, quantity, unit, description, image FROM products WHERE store_id=? ORDER BY id DESC",
-        [storeId]
-    );
-    res.json(rows);
-}));
+app.get("/products/:storeId", async (req, res) => {
+  const products = await Product.find({ store_id: req.params.storeId })
+    .sort({ _id: -1 });
 
-app.get("/store/:storeId/slots", asyncHandler(async (req, res) => {
-    const storeId = Number(req.params.storeId);
-    if (!Number.isFinite(storeId)) return res.status(400).json({ message: "Invalid store id" });
-    const [rows] = await dbp.query(
-        "SELECT id, store_id, slot_time FROM time_slots WHERE store_id=? ORDER BY id DESC",
-        [storeId]
-    );
-    res.json(rows);
-}));
+  res.json(products);
+});
 
 // ================= OWNER APIs =================
 app.get("/owner/store", requireAuth, requireOwner, asyncHandler(async (req, res) => {
-    const store = await getOwnerStore(req.auth.user.id);
+    const store = await getOwnerStore(req.auth.user._id);
     res.json(store || null);
 }));
 
-app.post("/owner/store", requireAuth, requireOwner, asyncHandler(async (req, res) => {
-    const { store_name } = req.body || {};
-    if (!store_name) return res.status(400).json({ message: "Store name required" });
+app.get("/owner/products", requireAuth, requireOwner, async (req, res) => {
+  const store = await getOwnerStore(req.auth.user._id);
 
-    const storeNameCaps = String(store_name).trim().toUpperCase();
-    if (!storeNameCaps) return res.status(400).json({ message: "Store name required" });
+  if (!store) return res.json({ products: [] });
 
-    const existing = await getOwnerStore(req.auth.user.id);
-    if (existing) return res.status(409).json({ message: "Store already exists" });
+  const products = await Product.find({ store_id: store._id })
+    .sort({ _id: -1 });
 
-    const [result] = await dbp.query(
-        "INSERT INTO stores (owner_id, store_name, delivery_available, delivery_charge, min_order_free_delivery, pickup_available) VALUES (?, ?, 0, 0, 0, 1)",
-        [req.auth.user.id, storeNameCaps]
-    );
-    const store = await getOwnerStore(req.auth.user.id);
-    res.json({ message: "Store created", store: store || { id: result.insertId, store_name: storeNameCaps } });
-}));
+  res.json({ products });
+});
 
-app.patch("/owner/store", requireAuth, requireOwner, asyncHandler(async (req, res) => {
-    const { store_name } = req.body || {};
-    if (!store_name) return res.status(400).json({ message: "Store name required" });
+app.post("/owner/products", requireAuth, requireOwner, upload.single("image"), async (req, res) => {
+  const { name, price, quantity, unit, description } = req.body || {};
 
-    const storeNameCaps = String(store_name).trim().toUpperCase();
-    if (!storeNameCaps) return res.status(400).json({ message: "Store name required" });
+  if (!name || !price || !quantity || !unit) {
+    return res.status(400).json({ message: "Missing fields" });
+  }
 
-    const store = await getOwnerStore(req.auth.user.id);
-    if (!store) return res.status(404).json({ message: "Store not found" });
+  const store = await getOwnerStore(req.auth.user._id);
 
-    await dbp.query("UPDATE stores SET store_name=? WHERE owner_id=?", [storeNameCaps, req.auth.user.id]);
-    const updated = await getOwnerStore(req.auth.user.id);
-    res.json({ message: "Store updated", store: updated });
-}));
+  if (!store) {
+    return res.status(400).json({ message: "Create a store first" });
+  }
 
-app.get("/owner/products", requireAuth, requireOwner, asyncHandler(async (req, res) => {
-    const store = await getOwnerStore(req.auth.user.id);
-    if (!store) return res.json({ products: [] });
+  const image = req.file ? req.file.filename : null;
 
-    const [rows] = await dbp.query(
-        "SELECT id, store_id, name, price, quantity, unit, description, image FROM products WHERE store_id=? ORDER BY id DESC",
-        [store.id]
-    );
-    res.json({ products: rows });
-}));
+  await Product.create({
+    store_id: store._id,
+    name,
+    price: Number(price),
+    quantity: Number(quantity),
+    unit,
+    description: description || "",
+    image
+  });
 
-app.post("/owner/products", requireAuth, requireOwner, upload.single("image"), asyncHandler(async (req, res) => {
-    const { name, price, quantity, unit, description } = req.body || {};
-    const productName = String(name || "").trim();
-    const productUnit = String(unit || "").trim();
-    const descriptionText = String(description || "").trim();
-    const productPrice = Number(price);
-    const productQuantity = Number(quantity);
+  res.json({ message: "Product added" });
+});
 
-    if (!productName || !productUnit || !Number.isFinite(productPrice) || !Number.isFinite(productQuantity)) {
-        return res.status(400).json({ message: "Missing fields" });
-    }
+app.delete("/owner/products/:productId", requireAuth, requireOwner, async (req, res) => {
+  const store = await getOwnerStore(req.auth.user._id);
 
-    const store = await getOwnerStore(req.auth.user.id);
-    if (!store) return res.status(400).json({ message: "Create a store first" });
+  if (!store) {
+    return res.status(400).json({ message: "Create a store first" });
+  }
 
-    const image = req.file ? req.file.filename : null;
+  const product = await Product.findOneAndDelete({
+    _id: req.params.productId,
+    store_id: store._id
+  });
 
-    await dbp.query(
-        "INSERT INTO products (store_id, name, price, quantity, unit, description, image) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [store.id, productName, productPrice, productQuantity, productUnit, descriptionText, image]
-    );
-    res.json({ message: "Product added" });
-}));
+  if (!product) {
+    return res.status(404).json({ message: "Product not found" });
+  }
 
-app.delete("/owner/products/:productId", requireAuth, requireOwner, asyncHandler(async (req, res) => {
-    const productId = Number(req.params.productId);
-    if (!Number.isFinite(productId)) return res.status(400).json({ message: "Invalid product id" });
-
-    const store = await getOwnerStore(req.auth.user.id);
-    if (!store) return res.status(400).json({ message: "Create a store first" });
-
-    const [result] = await dbp.query(
-        "DELETE FROM products WHERE id=? AND store_id=?",
-        [productId, store.id]
-    );
-    if (!result.affectedRows) return res.status(404).json({ message: "Product not found" });
-    res.json({ message: "Product removed" });
-}));
-
-app.post("/api/store/delivery-settings", requireAuth, requireOwner, asyncHandler(async (req, res) => {
-    const { delivery_available, delivery_charge, min_order, pickup_available } = req.body || {};
-    const store = await getOwnerStore(req.auth.user.id);
-    if (!store) return res.status(400).json({ message: "Create a store first" });
-
-    await dbp.query(
-        "UPDATE stores SET delivery_available=?, delivery_charge=?, min_order_free_delivery=?, pickup_available=? WHERE owner_id=?",
-        [
-            delivery_available ? 1 : 0,
-            Number(delivery_charge) || 0,
-            Number(min_order) || 0,
-            pickup_available ? 1 : 0,
-            req.auth.user.id
-        ]
-    );
-    const updated = await getOwnerStore(req.auth.user.id);
-    res.json({ message: "Updated", store: updated });
-}));
-
-app.get("/owner/slots", requireAuth, requireOwner, asyncHandler(async (req, res) => {
-    const store = await getOwnerStore(req.auth.user.id);
-    if (!store) return res.json({ slots: [] });
-    const [rows] = await dbp.query(
-        "SELECT id, store_id, slot_time FROM time_slots WHERE store_id=? ORDER BY id DESC",
-        [store.id]
-    );
-    res.json({ slots: rows });
-}));
-
-app.post("/owner/slots", requireAuth, requireOwner, asyncHandler(async (req, res) => {
-    const { slot_time } = req.body || {};
-    if (!slot_time) return res.status(400).json({ message: "slot_time required" });
-
-    const store = await getOwnerStore(req.auth.user.id);
-    if (!store) return res.status(400).json({ message: "Create a store first" });
-
-    try {
-        await dbp.query(
-            "INSERT INTO time_slots (store_id, slot_time) VALUES (?, ?)",
-            [store.id, slot_time]
-        );
-    } catch (e) {
-        if (String(e?.message || "").toLowerCase().includes("duplicate")) {
-            return res.status(409).json({ message: "Slot already exists" });
-        }
-        throw e;
-    }
-
-    res.json({ message: "Slot added" });
-}));
-
-app.delete("/owner/slots/:slotId", requireAuth, requireOwner, asyncHandler(async (req, res) => {
-    const slotId = Number(req.params.slotId);
-    if (!Number.isFinite(slotId)) return res.status(400).json({ message: "Invalid slot id" });
-
-    const store = await getOwnerStore(req.auth.user.id);
-    if (!store) return res.status(400).json({ message: "Create a store first" });
-
-    const [result] = await dbp.query(
-        "DELETE FROM time_slots WHERE id=? AND store_id=?",
-        [slotId, store.id]
-    );
-    if (!result.affectedRows) return res.status(404).json({ message: "Slot not found" });
-    res.json({ message: "Slot removed" });
-}));
+  res.json({ message: "Product removed" });
+});
 
 // ================= CUSTOMER APIs =================
-app.get("/user/addresses", requireAuth, requireCustomer, asyncHandler(async (req, res) => {
-    const [rows] = await dbp.query(
-        "SELECT id, user_id, type, address_line, customer_name, phone, house, area, landmark, city, pincode FROM user_addresses WHERE user_id=? ORDER BY id DESC",
-        [req.auth.user.id]
-    );
-    res.json(rows);
-}));
 
-app.post("/user/addresses", requireAuth, requireCustomer, asyncHandler(async (req, res) => {
-    const { type, customer_name, phone, house, area, landmark, city, pincode } = req.body || {};
-    if (!type || !customer_name || !phone || !house || !area || !city || !pincode) {
-        return res.status(400).json({ message: "Missing fields" });
-    }
-    const address_line = [house, area, landmark, city, pincode].filter(Boolean).join(", ");
+app.post("/orders", requireAuth, requireCustomer, async (req, res) => {
+  const { store_id, delivery_type, address_id, slot_id, delivery_fee, items } = req.body || {};
 
-    const [result] = await dbp.query(
-        "INSERT INTO user_addresses (user_id, type, address_line, customer_name, phone, house, area, landmark, city, pincode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [req.auth.user.id, type, address_line, customer_name, phone, house, area, landmark || "", city, pincode]
-    );
+  if (!store_id || !items || items.length === 0) {
+    return res.status(400).json({ message: "Invalid data" });
+  }
 
-    const [rows] = await dbp.query(
-        "SELECT id, user_id, type, address_line, customer_name, phone, house, area, landmark, city, pincode FROM user_addresses WHERE id=?",
-        [result.insertId]
-    );
-    res.json({ message: "Address saved", address: rows[0] });
-}));
+  let total = Number(delivery_fee) || 0;
 
-app.patch("/user/addresses/:addressId", requireAuth, requireCustomer, asyncHandler(async (req, res) => {
-    const addressId = Number(req.params.addressId);
-    if (!Number.isFinite(addressId)) return res.status(400).json({ message: "Invalid address id" });
+  const formattedItems = items.map(it => {
+    const qty = Number(it.qty);
+    const price = Number(it.unit_price);
 
-    const { type, customer_name, phone, house, area, landmark, city, pincode } = req.body || {};
-    if (!type || !customer_name || !phone || !house || !area || !city || !pincode) {
-        return res.status(400).json({ message: "Missing fields" });
-    }
-    const address_line = [house, area, landmark, city, pincode].filter(Boolean).join(", ");
+    const line_total = qty * price;
+    total += line_total;
 
-    const [result] = await dbp.query(
-        `UPDATE user_addresses
-         SET type=?, address_line=?, customer_name=?, phone=?, house=?, area=?, landmark=?, city=?, pincode=?
-         WHERE id=? AND user_id=?`,
-        [type, address_line, customer_name, phone, house, area, landmark || "", city, pincode, addressId, req.auth.user.id]
-    );
-    if (!result.affectedRows) return res.status(404).json({ message: "Address not found" });
-    res.json({ message: "Address updated" });
-}));
+    return {
+      name: it.name,
+      qty,
+      unit_price: price,
+      line_total
+    };
+  });
 
-app.delete("/user/addresses/:addressId", requireAuth, requireCustomer, asyncHandler(async (req, res) => {
-    const addressId = Number(req.params.addressId);
-    if (!Number.isFinite(addressId)) return res.status(400).json({ message: "Invalid address id" });
+  const order = await Order.create({
+    customer_id: req.auth.user._id,
+    store_id,
+    items: formattedItems,
+    total_amount: total,
+    delivery_type,
+    address_id,
+    slot_id,
+    delivery_fee: Number(delivery_fee) || 0
+  });
 
-    const [result] = await dbp.query(
-        "DELETE FROM user_addresses WHERE id=? AND user_id=?",
-        [addressId, req.auth.user.id]
-    );
-    if (!result.affectedRows) return res.status(404).json({ message: "Address not found" });
-    res.json({ message: "Address deleted" });
-}));
+  res.json({
+    message: "Order placed",
+    order_id: order._id
+  });
+});
 
-app.post("/orders", requireAuth, requireCustomer, asyncHandler(async (req, res) => {
-    const { store_id, delivery_type, address_id, slot_id, delivery_fee, items } = req.body || {};
-    const storeId = Number(store_id);
-    if (!Number.isFinite(storeId)) return res.status(400).json({ message: "Invalid store" });
-    if (delivery_type !== "delivery" && delivery_type !== "pickup") {
-        return res.status(400).json({ message: "Invalid delivery type" });
-    }
-    if (!Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ message: "No items" });
-    }
+app.get("/user/orders", requireAuth, requireCustomer, async (req, res) => {
+  const orders = await Order.find({
+    customer_id: req.auth.user._id,
+    customer_deleted: false
+  }).sort({ _id: -1 });
 
-    const fee = Number(delivery_fee) || 0;
-    let itemsTotal = 0;
-    for (const it of items) {
-        const qty = Number(it?.qty);
-        const unit_price = Number(it?.unit_price);
-        if (!it?.name || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(unit_price) || unit_price < 0) {
-            return res.status(400).json({ message: "Invalid items" });
-        }
-        itemsTotal += qty * unit_price;
-    }
+  res.json(orders);
+});
 
-    const total_amount = itemsTotal + fee;
+app.delete("/user/orders/:orderId", requireAuth, requireCustomer, async (req, res) => {
+  await Order.findByIdAndUpdate(req.params.orderId, {
+    customer_deleted: true
+  });
 
-    const addressId = address_id === null || address_id === undefined || address_id === "" ? null : Number(address_id);
-    const slotId = slot_id === null || slot_id === undefined || slot_id === "" ? null : Number(slot_id);
-
-    const ownerOrderNumber = await getNextOwnerOrderNumber(storeId);
-    const customerOrderNumber = await getNextCustomerOrderNumber(req.auth.user.id);
-
-    const [orderResult] = await dbp.query(
-        `INSERT INTO orders (
-            customer_id, store_id, total_amount, status, delivery_type, address_id, slot_id, delivery_fee,
-            owner_order_number, customer_order_number, owner_notification_pending
-        ) VALUES (?, ?, ?, 'placed', ?, ?, ?, ?, ?, ?, 1)`,
-        [req.auth.user.id, storeId, total_amount, delivery_type, addressId, slotId, fee, ownerOrderNumber, customerOrderNumber]
-    );
-    const orderId = orderResult.insertId;
-
-    for (const it of items) {
-        const qty = Number(it.qty);
-        const unitPrice = Number(it.unit_price);
-        await dbp.query(
-            "INSERT INTO order_items (order_id, product_name, unit_price, qty, line_total) VALUES (?, ?, ?, ?, ?)",
-            [orderId, it.name, unitPrice, qty, qty * unitPrice]
-        );
-    }
-    res.json({
-        message: "Order placed",
-        order_id: orderId,
-        customer_order_number: customerOrderNumber,
-        owner_order_number: ownerOrderNumber
-    });
-}));
-
-app.get("/user/orders", requireAuth, requireCustomer, asyncHandler(async (req, res) => {
-    const [orders] = await dbp.query(
-        `SELECT o.*, o.customer_order_number AS display_order_number, s.store_name
-         FROM orders o
-         LEFT JOIN stores s ON s.id = o.store_id
-         WHERE o.customer_id = ? AND o.customer_deleted = 0
-         ORDER BY o.customer_order_number DESC, o.id DESC`,
-        [req.auth.user.id]
-    );
-
-    await attachItemsToOrders(orders);
-    res.json(orders);
-}));
-
-app.delete("/user/orders/:orderId", requireAuth, requireCustomer, asyncHandler(async (req, res) => {
-    const orderId = Number(req.params.orderId);
-    if (!Number.isFinite(orderId)) return res.status(400).json({ message: "Invalid order id" });
-
-    const [orders] = await dbp.query(
-        "SELECT id FROM orders WHERE id = ? AND customer_id = ? AND customer_deleted = 0",
-        [orderId, req.auth.user.id]
-    );
-    if (!orders[0]) return res.status(404).json({ message: "Order not found" });
-
-    await dbp.query(
-        "UPDATE orders SET customer_deleted = 1 WHERE id = ? AND customer_id = ?",
-        [orderId, req.auth.user.id]
-    );
-    await purgeOrderIfHiddenEverywhere(orderId);
-
-    res.json({ message: "Order removed from your order history" });
-}));
+  res.json({ message: "Order removed" });
+});
 
 // ================= ERROR HANDLER =================
 app.use((err, req, res, next) => {
@@ -734,140 +402,55 @@ app.use((err, req, res, next) => {
 });
 
 // ================= START =================
-async function start() {
-    try {
-        await ensureDatabaseExists();
-        initPool();
-        await initDb();
-        app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-    } catch (e) {
-        console.error("Failed to start server:", e);
-        process.exit(1);
-    }
-}
-app.get("/owner/orders/:store_id", requireAuth, requireOwner, asyncHandler(async (req, res) => {
-    const storeId = Number(req.params.store_id);
-    if (!Number.isFinite(storeId)) return res.status(400).json({ message: "Invalid store id" });
 
-    const ownerStore = await getOwnerStore(req.auth.user.id);
-    if (!ownerStore || Number(ownerStore.id) !== storeId) {
-        return res.status(403).json({ message: "Store access denied" });
-    }
 
-    const [orders] = await dbp.query(
-        `SELECT o.*, o.owner_order_number AS display_order_number, u.name AS customer_name
-         FROM orders o
-         LEFT JOIN users u ON u.id = o.customer_id
-         WHERE o.store_id = ? AND o.owner_deleted = 0
-         ORDER BY o.owner_order_number DESC, o.id DESC`,
-        [storeId]
-    );
+app.get("/owner/orders/:store_id", requireAuth, requireOwner, async (req, res) => {
+  const orders = await Order.find({
+    store_id: req.params.store_id,
+    owner_deleted: false
+  }).sort({ _id: -1 });
 
-    await attachItemsToOrders(orders);
-
-    res.json(orders);
-}));
-app.get("/owner/orders/:store_id/notifications", requireAuth, requireOwner, asyncHandler(async (req, res) => {
-    const storeId = Number(req.params.store_id);
-    if (!Number.isFinite(storeId)) return res.status(400).json({ message: "Invalid store id" });
-
-    const ownerStore = await getOwnerStore(req.auth.user.id);
-    if (!ownerStore || Number(ownerStore.id) !== storeId) {
-        return res.status(403).json({ message: "Store access denied" });
-    }
-
-    const [rows] = await dbp.query(
-        "SELECT COUNT(*) AS pending_count FROM orders WHERE store_id = ? AND owner_deleted = 0 AND owner_notification_pending = 1",
-        [storeId]
-    );
-    const count = Number(rows[0]?.pending_count) || 0;
-
-    if (count > 0) {
-        await dbp.query(
-            "UPDATE orders SET owner_notification_pending = 0 WHERE store_id = ? AND owner_deleted = 0 AND owner_notification_pending = 1",
-            [storeId]
-        );
-    }
-
-    res.json({ count });
-}));
-app.post("/update-order-status", requireAuth, requireOwner, asyncHandler(async (req, res) => {
-    const orderId = Number(req.body?.order_id);
-    const status = String(req.body?.status || "").trim().toLowerCase();
-    if (!Number.isFinite(orderId)) return res.status(400).json({ message: "Invalid order id" });
-    if (!["accepted", "rejected", "placed"].includes(status)) {
-        return res.status(400).json({ message: "Invalid status" });
-    }
-
-    const ownerStore = await getOwnerStore(req.auth.user.id);
-    if (!ownerStore) return res.status(404).json({ message: "Store not found" });
-
-    const [result] = await dbp.query(
-        "UPDATE orders SET status = ? WHERE id = ? AND store_id = ?",
-        [status, orderId, ownerStore.id]
-    );
-    if (!result.affectedRows) return res.status(404).json({ message: "Order not found" });
-
-    res.json({ message: "Order status updated" });
-}));
-app.delete("/owner/orders/:orderId", requireAuth, requireOwner, asyncHandler(async (req, res) => {
-    const orderId = Number(req.params.orderId);
-    if (!Number.isFinite(orderId)) return res.status(400).json({ message: "Invalid order id" });
-
-    const ownerStore = await getOwnerStore(req.auth.user.id);
-    if (!ownerStore) return res.status(404).json({ message: "Store not found" });
-
-    const [orders] = await dbp.query(
-        "SELECT id FROM orders WHERE id = ? AND store_id = ? AND owner_deleted = 0",
-        [orderId, ownerStore.id]
-    );
-    if (!orders[0]) return res.status(404).json({ message: "Order not found" });
-
-    await dbp.query(
-        "UPDATE orders SET owner_deleted = 1 WHERE id = ? AND store_id = ?",
-        [orderId, ownerStore.id]
-    );
-    await purgeOrderIfHiddenEverywhere(orderId);
-
-    res.json({ message: "Order removed from the store order panel" });
-}));
-app.post("/place-order", async (req, res) => {
-    const { user_id, store_id } = req.body;
-
-    try {
-        // order create
-        const [result] = await db.query(
-            "INSERT INTO orders (customer_id, store_id, status) VALUES (?, ?, 'placed')",
-            [user_id, store_id]
-        );
-
-        const orderId = result.insertId;
-
-        // cart items uthao
-        const [cartItems] = await db.query(
-            "SELECT * FROM cart WHERE user_id = ?",
-            [user_id]
-        );
-
-            for (let item of cartItems) {
-                const qty = Number(item.quantity) || 0;
-                const unitPrice = Number(item.price) || 0;
-                await db.query(
-                "INSERT INTO order_items (order_id, product_name, unit_price, qty, line_total) VALUES (?, ?, ?, ?, ?)",
-                [orderId, item.name, unitPrice, qty, qty * unitPrice]
-                );
-            }
-
-        // cart clear
-        await db.query("DELETE FROM cart WHERE user_id = ?", [user_id]);
-
-        res.json({ success: true });
-
-    } catch (err) {
-        console.log(err);
-        res.status(500).json({ error: "error" });
-    }
+  res.json(orders);
 });
 
 
-start();
+app.post("/update-order-status", requireAuth, requireOwner, async (req, res) => {
+  const { order_id, status } = req.body;
+
+  await Order.findByIdAndUpdate(order_id, { status });
+
+  res.json({ message: "Order status updated" });
+});
+
+app.delete("/owner/orders/:orderId", requireAuth, requireOwner, async (req, res) => {
+  await Order.findByIdAndUpdate(req.params.orderId, {
+    owner_deleted: true
+  });
+
+  res.json({ message: "Order removed" });
+});
+
+const PORT = Number(process.env.PORT) || 3000;
+
+async function startServer() {
+  try {
+    if (!process.env.MONGO_URI) {
+      throw new Error("MONGO_URI is missing in .env");
+    }
+
+    await mongoose.connect(process.env.MONGO_URI, {
+      serverSelectionTimeoutMS: 15000
+    });
+
+    console.log("MongoDB Connected");
+
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("MongoDB connection failed:", err.message);
+    process.exit(1);
+  }
+}
+
+startServer();
