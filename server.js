@@ -149,7 +149,12 @@ async function initDb() {
             delivery_type VARCHAR(20) NOT NULL,
             address_id INT,
             slot_id INT,
-            delivery_fee INT DEFAULT 0
+            delivery_fee INT DEFAULT 0,
+            owner_deleted TINYINT(1) NOT NULL DEFAULT 0,
+            customer_deleted TINYINT(1) NOT NULL DEFAULT 0,
+            owner_order_number INT DEFAULT NULL,
+            customer_order_number INT DEFAULT NULL,
+            owner_notification_pending TINYINT(1) NOT NULL DEFAULT 0
         )
     `);
 
@@ -159,6 +164,13 @@ async function initDb() {
     try { await dbp.query("ALTER TABLE orders ADD COLUMN delivery_fee INT DEFAULT 0"); } catch {}
     try { await dbp.query("ALTER TABLE orders ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'placed'"); } catch {}
     try { await dbp.query("ALTER TABLE orders MODIFY COLUMN status VARCHAR(20) NOT NULL DEFAULT 'placed'"); } catch {}
+    try { await dbp.query("ALTER TABLE orders ADD COLUMN owner_deleted TINYINT(1) NOT NULL DEFAULT 0"); } catch {}
+    try { await dbp.query("ALTER TABLE orders ADD COLUMN customer_deleted TINYINT(1) NOT NULL DEFAULT 0"); } catch {}
+    try { await dbp.query("ALTER TABLE orders ADD COLUMN owner_order_number INT DEFAULT NULL"); } catch {}
+    try { await dbp.query("ALTER TABLE orders ADD COLUMN customer_order_number INT DEFAULT NULL"); } catch {}
+    try { await dbp.query("ALTER TABLE orders ADD COLUMN owner_notification_pending TINYINT(1) NOT NULL DEFAULT 0"); } catch {}
+    try { await dbp.query("UPDATE orders SET owner_order_number = id WHERE owner_order_number IS NULL OR owner_order_number = 0"); } catch {}
+    try { await dbp.query("UPDATE orders SET customer_order_number = id WHERE customer_order_number IS NULL OR customer_order_number = 0"); } catch {}
 
     await dbp.query(`
         CREATE TABLE IF NOT EXISTS order_items (
@@ -244,6 +256,36 @@ async function attachItemsToOrders(orders) {
         order.items = items;
     }
     return orders;
+}
+
+async function getNextOwnerOrderNumber(storeId) {
+    const [rows] = await dbp.query(
+        "SELECT COALESCE(MAX(owner_order_number), 0) AS max_order_number FROM orders WHERE store_id = ? AND owner_deleted = 0",
+        [storeId]
+    );
+    return (Number(rows[0]?.max_order_number) || 0) + 1;
+}
+
+async function getNextCustomerOrderNumber(customerId) {
+    const [rows] = await dbp.query(
+        "SELECT COALESCE(MAX(customer_order_number), 0) AS max_order_number FROM orders WHERE customer_id = ? AND customer_deleted = 0",
+        [customerId]
+    );
+    return (Number(rows[0]?.max_order_number) || 0) + 1;
+}
+
+async function purgeOrderIfHiddenEverywhere(orderId) {
+    const [rows] = await dbp.query(
+        "SELECT owner_deleted, customer_deleted FROM orders WHERE id = ?",
+        [orderId]
+    );
+    const order = rows[0];
+    if (!order) return;
+
+    if (Number(order.owner_deleted) === 1 && Number(order.customer_deleted) === 1) {
+        await dbp.query("DELETE FROM order_items WHERE order_id = ?", [orderId]);
+        await dbp.query("DELETE FROM orders WHERE id = ?", [orderId]);
+    }
 }
 
 // ================= AUTH =================
@@ -620,9 +662,15 @@ app.post("/orders", requireAuth, requireCustomer, asyncHandler(async (req, res) 
     const addressId = address_id === null || address_id === undefined || address_id === "" ? null : Number(address_id);
     const slotId = slot_id === null || slot_id === undefined || slot_id === "" ? null : Number(slot_id);
 
+    const ownerOrderNumber = await getNextOwnerOrderNumber(storeId);
+    const customerOrderNumber = await getNextCustomerOrderNumber(req.auth.user.id);
+
     const [orderResult] = await dbp.query(
-        "INSERT INTO orders (customer_id, store_id, total_amount, status, delivery_type, address_id, slot_id, delivery_fee) VALUES (?, ?, ?, 'placed', ?, ?, ?, ?)",
-        [req.auth.user.id, storeId, total_amount, delivery_type, addressId, slotId, fee]
+        `INSERT INTO orders (
+            customer_id, store_id, total_amount, status, delivery_type, address_id, slot_id, delivery_fee,
+            owner_order_number, customer_order_number, owner_notification_pending
+        ) VALUES (?, ?, ?, 'placed', ?, ?, ?, ?, ?, ?, 1)`,
+        [req.auth.user.id, storeId, total_amount, delivery_type, addressId, slotId, fee, ownerOrderNumber, customerOrderNumber]
     );
     const orderId = orderResult.insertId;
 
@@ -634,17 +682,21 @@ app.post("/orders", requireAuth, requireCustomer, asyncHandler(async (req, res) 
             [orderId, it.name, unitPrice, qty, qty * unitPrice]
         );
     }
-
-    res.json({ message: "Order placed", order_id: orderId });
+    res.json({
+        message: "Order placed",
+        order_id: orderId,
+        customer_order_number: customerOrderNumber,
+        owner_order_number: ownerOrderNumber
+    });
 }));
 
 app.get("/user/orders", requireAuth, requireCustomer, asyncHandler(async (req, res) => {
     const [orders] = await dbp.query(
-        `SELECT o.*, s.store_name
+        `SELECT o.*, o.customer_order_number AS display_order_number, s.store_name
          FROM orders o
          LEFT JOIN stores s ON s.id = o.store_id
-         WHERE o.customer_id = ?
-         ORDER BY o.id DESC`,
+         WHERE o.customer_id = ? AND o.customer_deleted = 0
+         ORDER BY o.customer_order_number DESC, o.id DESC`,
         [req.auth.user.id]
     );
 
@@ -657,15 +709,18 @@ app.delete("/user/orders/:orderId", requireAuth, requireCustomer, asyncHandler(a
     if (!Number.isFinite(orderId)) return res.status(400).json({ message: "Invalid order id" });
 
     const [orders] = await dbp.query(
-        "SELECT id FROM orders WHERE id = ? AND customer_id = ?",
+        "SELECT id FROM orders WHERE id = ? AND customer_id = ? AND customer_deleted = 0",
         [orderId, req.auth.user.id]
     );
     if (!orders[0]) return res.status(404).json({ message: "Order not found" });
 
-    await dbp.query("DELETE FROM order_items WHERE order_id = ?", [orderId]);
-    await dbp.query("DELETE FROM orders WHERE id = ? AND customer_id = ?", [orderId, req.auth.user.id]);
+    await dbp.query(
+        "UPDATE orders SET customer_deleted = 1 WHERE id = ? AND customer_id = ?",
+        [orderId, req.auth.user.id]
+    );
+    await purgeOrderIfHiddenEverywhere(orderId);
 
-    res.json({ message: "Order deleted" });
+    res.json({ message: "Order removed from your order history" });
 }));
 
 // ================= ERROR HANDLER =================
@@ -700,17 +755,41 @@ app.get("/owner/orders/:store_id", requireAuth, requireOwner, asyncHandler(async
     }
 
     const [orders] = await dbp.query(
-        `SELECT o.*, u.name AS customer_name
+        `SELECT o.*, o.owner_order_number AS display_order_number, u.name AS customer_name
          FROM orders o
          LEFT JOIN users u ON u.id = o.customer_id
-         WHERE o.store_id = ?
-         ORDER BY o.id DESC`,
+         WHERE o.store_id = ? AND o.owner_deleted = 0
+         ORDER BY o.owner_order_number DESC, o.id DESC`,
         [storeId]
     );
 
     await attachItemsToOrders(orders);
 
     res.json(orders);
+}));
+app.get("/owner/orders/:store_id/notifications", requireAuth, requireOwner, asyncHandler(async (req, res) => {
+    const storeId = Number(req.params.store_id);
+    if (!Number.isFinite(storeId)) return res.status(400).json({ message: "Invalid store id" });
+
+    const ownerStore = await getOwnerStore(req.auth.user.id);
+    if (!ownerStore || Number(ownerStore.id) !== storeId) {
+        return res.status(403).json({ message: "Store access denied" });
+    }
+
+    const [rows] = await dbp.query(
+        "SELECT COUNT(*) AS pending_count FROM orders WHERE store_id = ? AND owner_deleted = 0 AND owner_notification_pending = 1",
+        [storeId]
+    );
+    const count = Number(rows[0]?.pending_count) || 0;
+
+    if (count > 0) {
+        await dbp.query(
+            "UPDATE orders SET owner_notification_pending = 0 WHERE store_id = ? AND owner_deleted = 0 AND owner_notification_pending = 1",
+            [storeId]
+        );
+    }
+
+    res.json({ count });
 }));
 app.post("/update-order-status", requireAuth, requireOwner, asyncHandler(async (req, res) => {
     const orderId = Number(req.body?.order_id);
@@ -739,15 +818,18 @@ app.delete("/owner/orders/:orderId", requireAuth, requireOwner, asyncHandler(asy
     if (!ownerStore) return res.status(404).json({ message: "Store not found" });
 
     const [orders] = await dbp.query(
-        "SELECT id FROM orders WHERE id = ? AND store_id = ?",
+        "SELECT id FROM orders WHERE id = ? AND store_id = ? AND owner_deleted = 0",
         [orderId, ownerStore.id]
     );
     if (!orders[0]) return res.status(404).json({ message: "Order not found" });
 
-    await dbp.query("DELETE FROM order_items WHERE order_id = ?", [orderId]);
-    await dbp.query("DELETE FROM orders WHERE id = ? AND store_id = ?", [orderId, ownerStore.id]);
+    await dbp.query(
+        "UPDATE orders SET owner_deleted = 1 WHERE id = ? AND store_id = ?",
+        [orderId, ownerStore.id]
+    );
+    await purgeOrderIfHiddenEverywhere(orderId);
 
-    res.json({ message: "Order deleted" });
+    res.json({ message: "Order removed from the store order panel" });
 }));
 app.post("/place-order", async (req, res) => {
     const { user_id, store_id } = req.body;

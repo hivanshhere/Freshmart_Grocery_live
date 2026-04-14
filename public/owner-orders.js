@@ -89,12 +89,13 @@ function renderOrders(orders) {
     }
 
     listEl.innerHTML = orders.map(order => {
+        const visibleOrderNumber = Number(order.display_order_number) || Number(order.id) || 0;
         const itemsHtml = (order.items || []).length
             ? order.items.map(item => `
                 <div class="order-item">
                     <div>
                         <div class="order-item__name">${escapeHtml(item.product_name)}</div>
-                        <div class="order-item__meta">Qty: ${Number(item.qty) || 0} • Unit Price: ${formatMoney(item.unit_price)}</div>
+                        <div class="order-item__meta">Qty: ${Number(item.qty) || 0} &bull; Unit Price: ${formatMoney(item.unit_price)}</div>
                     </div>
                     <div class="order-item__meta">${formatMoney(item.line_total || ((Number(item.qty) || 0) * (Number(item.unit_price) || 0)))}</div>
                 </div>
@@ -105,7 +106,7 @@ function renderOrders(orders) {
             <article class="order-card">
                 <div class="order-card__top">
                     <div>
-                        <h3>Order #${order.id}</h3>
+                        <h3>Order #${visibleOrderNumber}</h3>
                         <p class="${statusClass(order.status)}">${escapeHtml(order.status || "placed")}</p>
                     </div>
                     <a class="orders-btn orders-btn--ghost" href="owner-dashboard.html">Dashboard</a>
@@ -133,6 +134,22 @@ function renderOrders(orders) {
     }).join("");
 }
 
+async function checkNewOrderNotifications(storeId) {
+    const data = await fetchJson(`${API_BASE}/owner/orders/${storeId}/notifications`, {
+        method: "GET",
+        headers: { "Authorization": `Bearer ${ownerToken}` }
+    });
+    const count = Number(data?.count) || 0;
+    if (count <= 0) return;
+
+    const message = count === 1
+        ? "A new order arrived for your store."
+        : `${count} new orders arrived for your store.`;
+
+    showFeedback(message, "success");
+    window.alert(message);
+}
+
 async function loadOrders() {
     try {
         showFeedback("", "success");
@@ -141,10 +158,13 @@ async function loadOrders() {
             headers: { "Authorization": `Bearer ${ownerToken}` }
         });
 
-        const orders = await fetchJson(`${API_BASE}/owner/orders/${currentStore.id}`, {
-            method: "GET",
-            headers: { "Authorization": `Bearer ${ownerToken}` }
-        });
+        const [orders] = await Promise.all([
+            fetchJson(`${API_BASE}/owner/orders/${currentStore.id}`, {
+                method: "GET",
+                headers: { "Authorization": `Bearer ${ownerToken}` }
+            }),
+            checkNewOrderNotifications(currentStore.id)
+        ]);
 
         renderSummary(Array.isArray(orders) ? orders : []);
         renderOrders(Array.isArray(orders) ? orders : []);
@@ -165,7 +185,7 @@ async function updateOrderStatus(orderId, status) {
             },
             body: JSON.stringify({ order_id: orderId, status })
         });
-        showFeedback(`Order #${orderId} marked as ${status}.`, "success");
+        showFeedback(`Order status updated to ${status}.`, "success");
         await loadOrders();
     } catch (e) {
         showFeedback(e.message, "error");
@@ -181,7 +201,7 @@ async function deleteOrder(orderId) {
             method: "DELETE",
             headers: { "Authorization": `Bearer ${ownerToken}` }
         });
-        showFeedback(`Order #${orderId} deleted.`, "success");
+        showFeedback("The order was removed from the owner page only.", "success");
         await loadOrders();
     } catch (e) {
         showFeedback(e.message, "error");

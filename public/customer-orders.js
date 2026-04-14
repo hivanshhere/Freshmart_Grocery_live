@@ -95,12 +95,13 @@ function renderOrders(orders) {
     }
 
     customerListEl.innerHTML = orders.map(order => {
+        const visibleOrderNumber = Number(order.display_order_number) || Number(order.id) || 0;
         const itemsHtml = (order.items || []).length
             ? order.items.map(item => `
                 <div class="order-item">
                     <div>
                         <div class="order-item__name">${escapeHtml(item.product_name)}</div>
-                        <div class="order-item__meta">Qty: ${Number(item.qty) || 0} • Unit Price: ${formatMoney(item.unit_price)}</div>
+                        <div class="order-item__meta">Qty: ${Number(item.qty) || 0} &bull; Unit Price: ${formatMoney(item.unit_price)}</div>
                     </div>
                     <div class="order-item__meta">${formatMoney(item.line_total || ((Number(item.qty) || 0) * (Number(item.unit_price) || 0)))}</div>
                 </div>
@@ -111,7 +112,7 @@ function renderOrders(orders) {
             <article class="order-card">
                 <div class="order-card__top">
                     <div>
-                        <h3>Order #${order.id}</h3>
+                        <h3>Order #${visibleOrderNumber}</h3>
                         <p class="${statusClass(order.status)}">${escapeHtml(order.status || "placed")}</p>
                     </div>
                     <a class="orders-btn orders-btn--ghost" href="stores.html">Keep Shopping</a>
@@ -158,7 +159,7 @@ async function deleteCustomerOrder(orderId) {
             throw new Error(data?.message || `Could not delete order (HTTP ${res.status})`);
         }
 
-        showFeedback(data?.message || `Order #${orderId} deleted.`, "success");
+        showFeedback(data?.message || "The order was removed from your order history.", "success");
         await loadCustomerOrders();
     } catch (e) {
         showFeedback(e.message, "error");
