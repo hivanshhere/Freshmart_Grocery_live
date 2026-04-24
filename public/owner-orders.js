@@ -1,19 +1,47 @@
 const API_BASE = "http://localhost:3000";
 
-const ownerRole = localStorage.getItem("userRole");
-const ownerToken = localStorage.getItem("authToken");
-
-if (ownerRole !== "owner" || !ownerToken) {
-    alert("Please login as a store owner");
-    window.location.href = "login.html";
-}
-
 const feedbackEl = document.getElementById("ownerOrdersFeedback");
 const summaryEl = document.getElementById("ownerOrdersSummary");
 const listEl = document.getElementById("ownerOrdersList");
 const logoutBtn = document.getElementById("ownerLogoutBtn");
 
 let currentStore = null;
+const ownerReportDrafts = {};
+
+function ownerToken() {
+    return window.AppAuth?.getToken ? window.AppAuth.getToken() : (localStorage.getItem("authToken") || "");
+}
+
+function isOwnerReportEditing() {
+    const active = document.activeElement;
+    return !!active && active.closest(".report-form");
+}
+
+function captureOwnerReportDrafts() {
+    if (!listEl) return;
+    listEl.querySelectorAll(".report-form").forEach((formEl) => {
+        const orderId = formEl.getAttribute("data-order-id");
+        if (!orderId) return;
+
+        const typeEl = formEl.querySelector("[data-field='type']");
+        const ratingEl = formEl.querySelector("[data-field='rating']");
+        const messageEl = formEl.querySelector("[data-field='message']");
+
+        ownerReportDrafts[orderId] = {
+            reportType: String(typeEl?.value || "complaint"),
+            rating: String(ratingEl?.value || ""),
+            message: String(messageEl?.value || "")
+        };
+    });
+}
+
+function getOwnerReportDraft(orderId) {
+    return ownerReportDrafts[String(orderId)] || {
+        reportType: "complaint",
+        rating: "",
+        message: ""
+    };
+}
 
 function escapeHtml(value) {
     return String(value ?? "")
@@ -47,8 +75,8 @@ function showFeedback(message, type) {
 
 async function fetchJson(url, options) {
     const res = await fetch(url, options);
-    if (res.status === 401) {
-        localStorage.clear();
+    if (res.status === 401 || res.status === 403) {
+        window.AppAuth?.clearStoredSession?.();
         window.location.href = "login.html";
         return null;
     }
@@ -83,6 +111,8 @@ function renderSummary(orders) {
 
 function renderOrders(orders) {
     if (!listEl) return;
+    captureOwnerReportDrafts();
+
     if (!orders.length) {
         listEl.innerHTML = `<div class="orders-empty">No orders yet. New customer orders will appear here.</div>`;
         return;
@@ -90,6 +120,7 @@ function renderOrders(orders) {
 
     listEl.innerHTML = orders.map(order => {
         const visibleOrderNumber = Number(order.display_order_number) || Number(order.id) || 0;
+        const draft = getOwnerReportDraft(order.id);
         const itemsHtml = (order.items || []).length
             ? order.items.map(item => `
                 <div class="order-item">
@@ -125,9 +156,22 @@ function renderOrders(orders) {
                 </div>
 
                 <div class="order-card__actions">
-                    <button type="button" class="orders-btn orders-btn--primary" onclick="updateOrderStatus(${order.id}, 'accepted')">Accept</button>
-                    <button type="button" class="orders-btn orders-btn--ghost" onclick="updateOrderStatus(${order.id}, 'rejected')">Reject</button>
-                    <button type="button" class="orders-btn orders-btn--danger" onclick="deleteOrder(${order.id})">Delete</button>
+                    <button type="button" class="orders-btn orders-btn--primary" onclick="updateOrderStatus('${escapeHtml(order.id)}', 'accepted')">Accept</button>
+                    <button type="button" class="orders-btn orders-btn--ghost" onclick="updateOrderStatus('${escapeHtml(order.id)}', 'rejected')">Reject</button>
+                    <button type="button" class="orders-btn orders-btn--danger" onclick="deleteOrder('${escapeHtml(order.id)}')">Delete</button>
+                </div>
+
+                <div class="order-card__section">
+                    <span>Customer Review / Complaint To Admin</span>
+                    <div class="report-form" data-order-id="${order.id}">
+                        <select id="ownerReportType-${order.id}" class="report-form__input" data-field="type">
+                            <option value="complaint" ${draft.reportType === "complaint" ? "selected" : ""}>Complaint</option>
+                            <option value="review" ${draft.reportType === "review" ? "selected" : ""}>Review</option>
+                        </select>
+                        <input id="ownerReportRating-${order.id}" class="report-form__input" data-field="rating" type="number" min="1" max="5" placeholder="Rating (1-5 for review)" value="${escapeHtml(draft.rating)}">
+                        <textarea id="ownerReportMessage-${order.id}" class="report-form__input report-form__textarea" data-field="message" placeholder="Explain the customer behaviour for the admin">${escapeHtml(draft.message)}</textarea>
+                        <button type="button" class="orders-btn orders-btn--ghost" onclick="submitOwnerReport('${escapeHtml(order.id)}', '${escapeHtml(order.customer_user_id)}')">Send To Admin</button>
+                    </div>
                 </div>
             </article>
         `;
@@ -137,7 +181,7 @@ function renderOrders(orders) {
 async function checkNewOrderNotifications(storeId) {
     const data = await fetchJson(`${API_BASE}/owner/orders/${storeId}/notifications`, {
         method: "GET",
-        headers: { "Authorization": `Bearer ${ownerToken}` }
+        headers: { "Authorization": `Bearer ${ownerToken()}` }
     });
     const count = Number(data?.count) || 0;
     if (count <= 0) return;
@@ -152,22 +196,23 @@ async function checkNewOrderNotifications(storeId) {
 
 async function loadOrders() {
     try {
-        showFeedback("", "success");
         currentStore = await fetchJson(`${API_BASE}/owner/store`, {
             method: "GET",
-            headers: { "Authorization": `Bearer ${ownerToken}` }
+            headers: { "Authorization": `Bearer ${ownerToken()}` }
         });
 
         const [orders] = await Promise.all([
             fetchJson(`${API_BASE}/owner/orders/${currentStore.id}`, {
                 method: "GET",
-                headers: { "Authorization": `Bearer ${ownerToken}` }
+                headers: { "Authorization": `Bearer ${ownerToken()}` }
             }),
             checkNewOrderNotifications(currentStore.id)
         ]);
 
         renderSummary(Array.isArray(orders) ? orders : []);
-        renderOrders(Array.isArray(orders) ? orders : []);
+        if (!isOwnerReportEditing()) {
+            renderOrders(Array.isArray(orders) ? orders : []);
+        }
     } catch (e) {
         if (summaryEl) summaryEl.innerHTML = "";
         if (listEl) listEl.innerHTML = `<div class="orders-empty">${escapeHtml(e.message)}</div>`;
@@ -177,13 +222,13 @@ async function loadOrders() {
 
 async function updateOrderStatus(orderId, status) {
     try {
-        await fetchJson(`${API_BASE}/update-order-status`, {
-            method: "POST",
+        await fetchJson(`${API_BASE}/owner/orders/${orderId}/status`, {
+            method: "PATCH",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${ownerToken}`
+                "Authorization": `Bearer ${ownerToken()}`
             },
-            body: JSON.stringify({ order_id: orderId, status })
+            body: JSON.stringify({ status })
         });
         showFeedback(`Order status updated to ${status}.`, "success");
         await loadOrders();
@@ -199,7 +244,8 @@ async function deleteOrder(orderId) {
     try {
         await fetchJson(`${API_BASE}/owner/orders/${orderId}`, {
             method: "DELETE",
-            headers: { "Authorization": `Bearer ${ownerToken}` }
+            headers: { "Authorization": `Bearer ${ownerToken()}`
+            }
         });
         showFeedback("The order was removed from the owner page only.", "success");
         await loadOrders();
@@ -208,17 +254,60 @@ async function deleteOrder(orderId) {
     }
 }
 
-async function logoutOwner() {
-    try {
-        await fetch(`${API_BASE}/auth/logout`, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${ownerToken}` }
-        });
-    } catch {
-        // ignore
+async function submitOwnerReport(orderId, targetUserId) {
+    if (!targetUserId) {
+        showFeedback("This older order does not have enough customer data for reporting.", "error");
+        return;
     }
-    localStorage.clear();
-    window.location.href = "login.html";
+
+    const typeEl = document.getElementById(`ownerReportType-${orderId}`);
+    const ratingEl = document.getElementById(`ownerReportRating-${orderId}`);
+    const messageEl = document.getElementById(`ownerReportMessage-${orderId}`);
+
+    const reportType = String(typeEl?.value || "complaint");
+    const rating = String(ratingEl?.value || "").trim();
+    const message = String(messageEl?.value || "").trim();
+
+    if (!message) {
+        showFeedback("Please enter report details before sending them to the admin.", "error");
+        return;
+    }
+
+    if (reportType === "review" && (!rating || Number(rating) < 1 || Number(rating) > 5)) {
+        showFeedback("Please enter a rating between 1 and 5 for a review.", "error");
+        return;
+    }
+
+    try {
+        const payload = {
+            order_id: orderId,
+            target_user_id: targetUserId,
+            report_type: reportType,
+            message
+        };
+        if (reportType === "review") payload.rating = Number(rating);
+
+        const res = await fetchJson(`${API_BASE}/reports`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${ownerToken()}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        delete ownerReportDrafts[String(orderId)];
+        if (ratingEl) ratingEl.value = "";
+        if (messageEl) messageEl.value = "";
+        showFeedback(res?.message || "Your report was sent to the admin.", "success");
+        window.alert(res?.message || "Your report was sent to the admin.");
+    } catch (e) {
+        showFeedback(e.message, "error");
+    }
+}
+
+async function logoutOwner() {
+    await window.AppAuth?.logoutUser?.();
 }
 
 if (logoutBtn) {
@@ -228,8 +317,32 @@ if (logoutBtn) {
     });
 }
 
+if (listEl) {
+    listEl.addEventListener("input", (event) => {
+        const formEl = event.target.closest(".report-form");
+        if (!formEl) return;
+        const orderId = formEl.getAttribute("data-order-id");
+        if (!orderId) return;
+
+        ownerReportDrafts[orderId] = {
+            reportType: String(formEl.querySelector("[data-field='type']")?.value || "complaint"),
+            rating: String(formEl.querySelector("[data-field='rating']")?.value || ""),
+            message: String(formEl.querySelector("[data-field='message']")?.value || "")
+        };
+    });
+}
+
 window.updateOrderStatus = updateOrderStatus;
 window.deleteOrder = deleteOrder;
+window.submitOwnerReport = submitOwnerReport;
 
-loadOrders();
-setInterval(loadOrders, 10000);
+async function initOwnerOrdersPage() {
+    const session = await window.AppAuth?.validateCurrentSession?.({
+        expectedRole: "owner",
+        afterLogin: "owner-orders.html"
+    });
+    if (!session?.user) return;
+    loadOrders();
+}
+
+initOwnerOrdersPage();

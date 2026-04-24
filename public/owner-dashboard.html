@@ -19,6 +19,7 @@
 	</header>
 
 	<main class="dashboard">
+		<section id="ownerAccountNotice" class="owner-notice" style="display:none;"></section>
 		<h2 class="dashboard-title">Manage your store</h2>
 
 			<section class="dashboard-grid">
@@ -46,6 +47,20 @@
 								<input type="text" id="editStoreName" placeholder="Enter new store name">
 							</div>
 							<button class="action-btn" type="button" onclick="updateStoreName()">Update Name</button>
+
+							<div class="form-grid" style="margin-top:18px;">
+								<div class="form-field">
+									<label for="storeLatitude">Store Latitude</label>
+									<input type="number" id="storeLatitude" step="0.0000001" placeholder="e.g. 28.6139000">
+								</div>
+								<div class="form-field">
+									<label for="storeLongitude">Store Longitude</label>
+									<input type="number" id="storeLongitude" step="0.0000001" placeholder="e.g. 77.2090000">
+								</div>
+							</div>
+							<p class="help-text">Customers will only see your store if these coordinates are saved and they are within 5 km of your store.</p>
+							<button class="action-btn" type="button" onclick="useCurrentLocation()">Use My Current Location</button>
+							<button class="action-btn" type="button" onclick="saveStoreLocation()">Save Store Location</button>
 						</div>
 					</div>
 				</div>
@@ -173,6 +188,7 @@
 		<p id="msg"></p>
 	</main>
 
+	<script src="auth.js"></script>
 	<script src="owner.js"></script>
 
 	</body>

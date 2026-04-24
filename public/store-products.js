@@ -1,4 +1,5 @@
-// storeId localStorage se lena
+const API_BASE = window.AppAuth?.API_BASE || "http://localhost:3000";
+
 const storeId = localStorage.getItem("storeId");
 
 if (!storeId) {
@@ -31,7 +32,7 @@ function buildItemKey(name, priceText) {
 }
 
 function buildImageUrl(image) {
-    return image ? `http://localhost:3000/uploads/${image}` : "";
+    return image ? `${API_BASE}/uploads/${image}` : "";
 }
 
 function getQtyInCart(itemKey) {
@@ -45,10 +46,13 @@ function getQtyInCart(itemKey) {
 
 function setQtyInCart(itemKey, itemPayload, nextQty) {
     const carts = getCartData();
-    const storeName = localStorage.getItem("storeName") || `Store ${storeId}`;
+    const selectedStoreName = localStorage.getItem("storeName") || "";
+    const storeName = /^Store\s+[a-f0-9]{24}$/i.test(selectedStoreName.trim()) ? "" : selectedStoreName;
 
     if (!carts[storeId]) {
         carts[storeId] = { storeName, items: {} };
+    } else if (storeName) {
+        carts[storeId].storeName = storeName;
     }
 
     const items = carts[storeId].items;
@@ -178,14 +182,24 @@ function renderStoreInfo(store) {
     }
 }
 
-fetch(`http://localhost:3000/products/${storeId}`)
+fetch(`${API_BASE}/products/${storeId}`)
     .then(res => res.json())
     .then(renderProducts)
     .catch(() => {
         container.innerHTML = '<div class="store-card store-card--empty"><h2>Error loading products</h2><p>Please refresh the page and try again.</p></div>';
     });
 
-fetch(`http://localhost:3000/store/${storeId}`)
+fetch(`${API_BASE}/store/${storeId}`)
     .then(res => res.json())
     .then(renderStoreInfo)
     .catch(() => renderStoreInfo(null));
+
+(async function redirectPrivilegedUsers() {
+    const session = await window.AppAuth?.validateCurrentSession?.({ redirectOnFail: false });
+    const role = session?.user?.role || "";
+    if (role === "owner") {
+        window.location.href = "owner-dashboard.html";
+    } else if (role === "admin") {
+        window.location.href = "admin-dashboard.html";
+    }
+})();

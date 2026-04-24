@@ -1,16 +1,44 @@
 const API_BASE = "http://localhost:3000";
 
-const customerRole = localStorage.getItem("userRole");
-const customerToken = localStorage.getItem("authToken");
-
-if (customerRole !== "customer" || !customerToken) {
-    alert("Please login as a customer");
-    window.location.href = "login.html";
-}
-
 const customerFeedbackEl = document.getElementById("customerOrdersFeedback");
 const customerSummaryEl = document.getElementById("customerOrdersSummary");
 const customerListEl = document.getElementById("customerOrdersList");
+const customerReportDrafts = {};
+
+function customerToken() {
+    return window.AppAuth?.getToken ? window.AppAuth.getToken() : (localStorage.getItem("authToken") || "");
+}
+
+function isCustomerReportEditing() {
+    const active = document.activeElement;
+    return !!active && active.closest(".report-form");
+}
+
+function captureCustomerReportDrafts() {
+    if (!customerListEl) return;
+    customerListEl.querySelectorAll(".report-form").forEach((formEl) => {
+        const orderId = formEl.getAttribute("data-order-id");
+        if (!orderId) return;
+
+        const typeEl = formEl.querySelector("[data-field='type']");
+        const ratingEl = formEl.querySelector("[data-field='rating']");
+        const messageEl = formEl.querySelector("[data-field='message']");
+
+        customerReportDrafts[orderId] = {
+            reportType: String(typeEl?.value || "complaint"),
+            rating: String(ratingEl?.value || ""),
+            message: String(messageEl?.value || "")
+        };
+    });
+}
+
+function getCustomerReportDraft(orderId) {
+    return customerReportDrafts[String(orderId)] || {
+        reportType: "complaint",
+        rating: "",
+        message: ""
+    };
+}
 
 function escapeHtml(value) {
     return String(value ?? "")
@@ -30,6 +58,11 @@ function statusClass(status) {
     const normalized = String(status || "placed").toLowerCase();
     if (normalized === "accepted") return "status-pill status-pill--accepted";
     if (normalized === "rejected") return "status-pill status-pill--rejected";
+    if (normalized === "resolved") return "status-pill status-pill--resolved";
+    if (normalized === "dismissed") return "status-pill status-pill--dismissed";
+    if (normalized === "warning") return "status-pill status-pill--warning";
+    if (normalized === "ban") return "status-pill status-pill--ban";
+    if (normalized === "remove") return "status-pill status-pill--remove";
     return "status-pill status-pill--placed";
 }
 
@@ -51,10 +84,10 @@ function showFeedback(message, type) {
 
 async function fetchOrders() {
     const res = await fetch(`${API_BASE}/user/orders`, {
-        headers: { "Authorization": `Bearer ${customerToken}` }
+        headers: { "Authorization": `Bearer ${customerToken()}` }
     });
-    if (res.status === 401) {
-        localStorage.clear();
+    if (res.status === 401 || res.status === 403) {
+        window.AppAuth?.clearStoredSession?.();
         window.location.href = "login.html";
         return null;
     }
@@ -89,6 +122,8 @@ function renderSummary(orders) {
 
 function renderOrders(orders) {
     if (!customerListEl) return;
+    captureCustomerReportDrafts();
+
     if (!orders.length) {
         customerListEl.innerHTML = `<div class="orders-empty">You have not placed any orders yet.</div>`;
         return;
@@ -96,6 +131,7 @@ function renderOrders(orders) {
 
     customerListEl.innerHTML = orders.map(order => {
         const visibleOrderNumber = Number(order.display_order_number) || Number(order.id) || 0;
+        const draft = getCustomerReportDraft(order.id);
         const itemsHtml = (order.items || []).length
             ? order.items.map(item => `
                 <div class="order-item">
@@ -131,7 +167,20 @@ function renderOrders(orders) {
                 </div>
 
                 <div class="order-card__actions">
-                    <button type="button" class="orders-btn orders-btn--danger" onclick="deleteCustomerOrder(${order.id})">Delete</button>
+                    <button type="button" class="orders-btn orders-btn--danger" onclick="deleteCustomerOrder('${escapeHtml(order.id)}')">Delete</button>
+                </div>
+
+                <div class="order-card__section">
+                    <span>Store Owner Review / Complaint To Admin</span>
+                    <div class="report-form" data-order-id="${order.id}">
+                        <select id="customerReportType-${order.id}" class="report-form__input" data-field="type">
+                            <option value="complaint" ${draft.reportType === "complaint" ? "selected" : ""}>Complaint</option>
+                            <option value="review" ${draft.reportType === "review" ? "selected" : ""}>Review</option>
+                        </select>
+                        <input id="customerReportRating-${order.id}" class="report-form__input" data-field="rating" type="number" min="1" max="5" placeholder="Rating (1-5 for review)" value="${escapeHtml(draft.rating)}">
+                        <textarea id="customerReportMessage-${order.id}" class="report-form__input report-form__textarea" data-field="message" placeholder="Share your experience with this store owner">${escapeHtml(draft.message)}</textarea>
+                        <button type="button" class="orders-btn orders-btn--ghost" onclick="submitCustomerReport('${escapeHtml(order.id)}', '${escapeHtml(order.owner_id)}')">Send To Admin</button>
+                    </div>
                 </div>
             </article>
         `;
@@ -145,11 +194,11 @@ async function deleteCustomerOrder(orderId) {
     try {
         const res = await fetch(`${API_BASE}/user/orders/${orderId}`, {
             method: "DELETE",
-            headers: { "Authorization": `Bearer ${customerToken}` }
+            headers: { "Authorization": `Bearer ${customerToken()}` }
         });
 
-        if (res.status === 401) {
-            localStorage.clear();
+        if (res.status === 401 || res.status === 403) {
+            window.AppAuth?.clearStoredSession?.();
             window.location.href = "login.html";
             return;
         }
@@ -166,13 +215,77 @@ async function deleteCustomerOrder(orderId) {
     }
 }
 
+async function submitCustomerReport(orderId, targetUserId) {
+    if (!targetUserId) {
+        showFeedback("This order does not include owner information for reporting.", "error");
+        return;
+    }
+
+    const typeEl = document.getElementById(`customerReportType-${orderId}`);
+    const ratingEl = document.getElementById(`customerReportRating-${orderId}`);
+    const messageEl = document.getElementById(`customerReportMessage-${orderId}`);
+
+    const reportType = String(typeEl?.value || "complaint");
+    const rating = String(ratingEl?.value || "").trim();
+    const message = String(messageEl?.value || "").trim();
+
+    if (!message) {
+        showFeedback("Please enter report details before sending them to the admin.", "error");
+        return;
+    }
+
+    if (reportType === "review" && (!rating || Number(rating) < 1 || Number(rating) > 5)) {
+        showFeedback("Please enter a rating between 1 and 5 for a review.", "error");
+        return;
+    }
+
+    try {
+        const payload = {
+            order_id: orderId,
+            target_user_id: targetUserId,
+            report_type: reportType,
+            message
+        };
+        if (reportType === "review") payload.rating = Number(rating);
+
+        const res = await fetch(`${API_BASE}/reports`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${customerToken()}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.status === 401 || res.status === 403) {
+            window.AppAuth?.clearStoredSession?.();
+            window.location.href = "login.html";
+            return;
+        }
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+            throw new Error(data?.message || `Could not submit report (HTTP ${res.status})`);
+        }
+
+        delete customerReportDrafts[String(orderId)];
+        if (ratingEl) ratingEl.value = "";
+        if (messageEl) messageEl.value = "";
+        showFeedback(data?.message || "Your report was sent to the admin.", "success");
+        window.alert(data?.message || "Your report was sent to the admin.");
+    } catch (e) {
+        showFeedback(e.message, "error");
+    }
+}
+
 async function loadCustomerOrders() {
     try {
-        showFeedback("", "success");
         const orders = await fetchOrders();
         if (!orders) return;
         renderSummary(orders);
-        renderOrders(orders);
+        if (!isCustomerReportEditing()) {
+            renderOrders(orders);
+        }
     } catch (e) {
         if (customerSummaryEl) customerSummaryEl.innerHTML = "";
         if (customerListEl) customerListEl.innerHTML = `<div class="orders-empty">${escapeHtml(e.message)}</div>`;
@@ -180,7 +293,31 @@ async function loadCustomerOrders() {
     }
 }
 
-loadCustomerOrders();
-setInterval(loadCustomerOrders, 10000);
+if (customerListEl) {
+    customerListEl.addEventListener("input", (event) => {
+        const formEl = event.target.closest(".report-form");
+        if (!formEl) return;
+        const orderId = formEl.getAttribute("data-order-id");
+        if (!orderId) return;
+
+        customerReportDrafts[orderId] = {
+            reportType: String(formEl.querySelector("[data-field='type']")?.value || "complaint"),
+            rating: String(formEl.querySelector("[data-field='rating']")?.value || ""),
+            message: String(formEl.querySelector("[data-field='message']")?.value || "")
+        };
+    });
+}
+
+async function initCustomerOrdersPage() {
+    const session = await window.AppAuth?.validateCurrentSession?.({
+        expectedRole: "customer",
+        afterLogin: "customer-orders.html"
+    });
+    if (!session?.user) return;
+    loadCustomerOrders();
+}
+
+initCustomerOrdersPage();
 
 window.deleteCustomerOrder = deleteCustomerOrder;
+window.submitCustomerReport = submitCustomerReport;
