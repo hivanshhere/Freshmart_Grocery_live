@@ -15,6 +15,7 @@
     <nav class="nav-menu">
         <a href="index.html">Home</a>
         <a href="stores.html">Stores</a>
+        <a href="admin-complaints.html">All Complaints</a>
         <a href="#" id="adminLogoutBtn">Logout</a>
     </nav>
 </header>
@@ -23,8 +24,9 @@
     <section class="admin-hero">
         <div>
             <p class="admin-hero__eyebrow">Platform control</p>
-            <h2>Monitor owners, customers, and incoming reviews</h2>
-            <p>Review complaints and feedback from both sides, issue warnings when needed, and ban or remove users if they violate platform rules.</p>
+            <h2>Monitor store owners and customers</h2>
+            <p>Review platform users separately so store accounts and customer accounts stay easy to identify.</p>
+            <a class="orders-btn orders-btn--primary admin-hero__button" href="admin-complaints.html">All Complaints</a>
         </div>
     </section>
 
@@ -35,24 +37,17 @@
     <section class="admin-grid">
         <div class="admin-panel">
             <div class="admin-panel__header">
-                <h3>Pending Reviews & Complaints</h3>
+                <h3>Store Owners</h3>
             </div>
-            <div class="admin-panel__body" id="adminReportsList"></div>
+            <div class="admin-panel__body" id="adminOwnersList"></div>
         </div>
 
         <div class="admin-panel">
             <div class="admin-panel__header">
-                <h3>Users Monitoring</h3>
+                <h3>Customers</h3>
             </div>
-            <div class="admin-panel__body" id="adminUsersList"></div>
+            <div class="admin-panel__body" id="adminCustomersList"></div>
         </div>
-    </section>
-
-    <section class="admin-panel admin-panel--full">
-        <div class="admin-panel__header">
-            <h3>Recent Admin Actions</h3>
-        </div>
-        <div class="admin-panel__body" id="adminActionsList"></div>
     </section>
 </main>
 

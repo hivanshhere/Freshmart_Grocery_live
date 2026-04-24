@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Complaints</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="orders.css">
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<header class="main-header">
+    <h1>Admin Complaints</h1>
+    <nav class="nav-menu">
+        <a href="index.html">Home</a>
+        <a href="admin-dashboard.html">Admin Dashboard</a>
+        <a href="#" id="adminLogoutBtn">Logout</a>
+    </nav>
+</header>
+
+<main class="admin-shell">
+    <section class="admin-hero">
+        <div>
+            <p class="admin-hero__eyebrow">Reports center</p>
+            <h2>All complaints and reviews</h2>
+            <p>Review feedback from customers and store owners, take action where needed, and track recent admin decisions.</p>
+        </div>
+    </section>
+
+    <div id="adminFeedback"></div>
+
+    <section class="admin-panel admin-panel--full">
+        <div class="admin-panel__header">
+            <h3>Complaints & Reviews</h3>
+        </div>
+        <div class="admin-panel__body" id="adminReportsList"></div>
+    </section>
+
+    <section class="admin-panel admin-panel--full">
+        <div class="admin-panel__header">
+            <h3>Recent Admin Actions</h3>
+        </div>
+        <div class="admin-panel__body" id="adminActionsList"></div>
+    </section>
+</main>
+
+<script src="admin-complaints.js"></script>
+</body>
+</html>

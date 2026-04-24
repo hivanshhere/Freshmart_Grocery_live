@@ -1264,6 +1264,7 @@ app.get("/admin/dashboard", requireAuth, requireAdmin, asyncHandler(async (req, 
   const storeMap = new Map(stores.map((store) => [String(store._id), store]));
   const ownerStoreMap = new Map(ownerStores.map((store) => [String(store.owner_id), store]));
   const orderMap = new Map(reportOrders.map((order) => [String(order._id), order]));
+  const displayIdMap = await getStoreDisplayIdMap();
 
   res.json({
     summary: {
@@ -1276,7 +1277,7 @@ app.get("/admin/dashboard", requireAuth, requireAdmin, asyncHandler(async (req, 
     users: users.map((user) => ({
       ...userDto(user),
       created_at: user.createdAt,
-      store_id: ownerStoreMap.get(String(user._id))?._id || "",
+      store_id: displayIdMap.get(String(ownerStoreMap.get(String(user._id))?._id || "")) || "",
       store_name: ownerStoreMap.get(String(user._id))?.store_name || ""
     })),
     reports: reports.map((report) => {

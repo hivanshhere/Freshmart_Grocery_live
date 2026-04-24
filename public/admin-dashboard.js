@@ -10,9 +10,8 @@ if (adminRole !== "admin" || !adminToken) {
 
 const feedbackEl = document.getElementById("adminFeedback");
 const summaryEl = document.getElementById("adminSummary");
-const reportsEl = document.getElementById("adminReportsList");
-const usersEl = document.getElementById("adminUsersList");
-const actionsEl = document.getElementById("adminActionsList");
+const ownersEl = document.getElementById("adminOwnersList");
+const customersEl = document.getElementById("adminCustomersList");
 const logoutBtn = document.getElementById("adminLogoutBtn");
 
 function escapeHtml(value) {
@@ -38,14 +37,12 @@ function statusClass(status) {
     if (normalized === "warned") return "status-pill status-pill--warned";
     if (normalized === "banned") return "status-pill status-pill--banned";
     if (normalized === "removed") return "status-pill status-pill--removed";
-    if (normalized === "resolved") return "status-pill status-pill--resolved";
-    if (normalized === "dismissed") return "status-pill status-pill--dismissed";
     return "status-pill status-pill--placed";
 }
 
 async function fetchJson(url, options = {}) {
     const res = await fetch(url, options);
-    if (res.status === 401) {
+    if (res.status === 401 || res.status === 403) {
         localStorage.clear();
         window.location.href = "login.html";
         return null;
@@ -67,72 +64,27 @@ function renderSummary(summary) {
     `;
 }
 
-function renderReports(reports) {
-    if (!reports.length) {
-        reportsEl.innerHTML = `<div class="orders-empty">No reports submitted yet.</div>`;
-        return;
-    }
-
-    reportsEl.innerHTML = reports.map((report) => `
-        <article class="admin-card">
-            <div class="admin-card__top">
-                <div>
-                    <h4>${escapeHtml(report.report_type)} for ${escapeHtml(report.target_name)}</h4>
-                    <p class="${statusClass(report.status)}">${escapeHtml(report.status)}</p>
-                </div>
-                <div>
-                    <strong>Order #${escapeHtml(report.order_display_number || report.order_id || "")}</strong>
-                </div>
-            </div>
-
-            <div class="admin-card__meta">
-                <div><span>Reporter</span><strong>${escapeHtml(report.reporter_name)} (${escapeHtml(report.reporter_role)})</strong></div>
-                <div><span>Target</span><strong>${escapeHtml(report.target_name)} (${escapeHtml(report.target_role)})</strong></div>
-                <div><span>Store</span><strong>${escapeHtml(report.store_name || "N/A")}</strong></div>
-                <div><span>Rating</span><strong>${report.rating ? `${Number(report.rating)}/5` : "Not provided"}</strong></div>
-            </div>
-
-            <div class="admin-card__message">
-                <span>Message</span>
-                <p>${escapeHtml(report.message)}</p>
-            </div>
-
-            <input class="admin-card__note" id="reportNote-${report.id}" placeholder="Admin note for this action">
-
-            <div class="admin-card__actions">
-                <button type="button" class="orders-btn orders-btn--primary" onclick="takeReportAction('${escapeHtml(report.id)}', '${escapeHtml(report.target_user_id)}', 'warning')">Issue Warning</button>
-                <button type="button" class="orders-btn orders-btn--danger" onclick="takeReportAction('${escapeHtml(report.id)}', '${escapeHtml(report.target_user_id)}', 'ban')">Ban User</button>
-                <button type="button" class="orders-btn orders-btn--danger" onclick="takeReportAction('${escapeHtml(report.id)}', '${escapeHtml(report.target_user_id)}', 'remove')">Remove User</button>
-                <button type="button" class="orders-btn orders-btn--ghost" onclick="dismissReport('${escapeHtml(report.id)}')">Dismiss Report</button>
-            </div>
-        </article>
-    `).join("");
-}
-
-function renderUsers(users) {
-    if (!users.length) {
-        usersEl.innerHTML = `<div class="orders-empty">No users available.</div>`;
-        return;
-    }
-
-    usersEl.innerHTML = users.map((user) => `
+function userCard(user, options = {}) {
+    const isOwner = options.roleLabel === "Store Owner";
+    return `
         <article class="admin-card">
             <div class="admin-card__top">
                 <div>
                     <h4>${escapeHtml(user.name)}</h4>
-                    <p class="${statusClass(user.account_status)}">${escapeHtml(user.account_status)}</p>
+                    <p class="${statusClass(user.account_status)}">${escapeHtml(user.account_status || "active")}</p>
                 </div>
-                <div><strong>${escapeHtml(user.role)}</strong></div>
+                <div><strong>${escapeHtml(options.roleLabel || user.role)}</strong></div>
             </div>
 
             <div class="admin-card__meta">
                 <div><span>Email</span><strong>${escapeHtml(user.email)}</strong></div>
                 <div><span>Warnings</span><strong>${Number(user.warning_count) || 0}</strong></div>
-                <div><span>Store</span><strong>${escapeHtml(user.store_name || "N/A")}</strong></div>
+                ${isOwner ? `<div><span>Store</span><strong>${escapeHtml(user.store_name || "Store not created")}</strong></div>` : ""}
+                ${isOwner ? `<div><span>Store ID</span><strong>${escapeHtml(user.store_id || "N/A")}</strong></div>` : ""}
                 <div><span>Restriction Note</span><strong>${escapeHtml(user.ban_reason || "None")}</strong></div>
             </div>
 
-            <input class="admin-card__note" id="userNote-${user.id}" placeholder="Optional admin note">
+            <input class="admin-card__note" id="userNote-${escapeHtml(user.id)}" placeholder="Optional admin note">
 
             <div class="admin-card__actions">
                 <button type="button" class="orders-btn orders-btn--primary" onclick="takeUserAction('${escapeHtml(user.id)}', 'warning')">Warn</button>
@@ -141,29 +93,25 @@ function renderUsers(users) {
                 <button type="button" class="orders-btn orders-btn--ghost" onclick="takeUserAction('${escapeHtml(user.id)}', 'activate')">Activate</button>
             </div>
         </article>
-    `).join("");
+    `;
 }
 
-function renderActions(actions) {
-    if (!actions.length) {
-        actionsEl.innerHTML = `<div class="orders-empty">No admin actions have been recorded yet.</div>`;
+function renderOwners(users) {
+    const owners = users.filter((user) => user.role === "owner");
+    if (!owners.length) {
+        ownersEl.innerHTML = `<div class="orders-empty">No store owners available.</div>`;
         return;
     }
+    ownersEl.innerHTML = owners.map((user) => userCard(user, { roleLabel: "Store Owner" })).join("");
+}
 
-    actionsEl.innerHTML = actions.map((action) => `
-        <article class="admin-card">
-            <div class="admin-card__top">
-                <div>
-                    <h4>${escapeHtml(action.action_type)}</h4>
-                    <p>${escapeHtml(action.admin_name)} acted on ${escapeHtml(action.target_name)} (${escapeHtml(action.target_role)})</p>
-                </div>
-            </div>
-            <div class="admin-card__message">
-                <span>Notes</span>
-                <p>${escapeHtml(action.notes || "No notes added")}</p>
-            </div>
-        </article>
-    `).join("");
+function renderCustomers(users) {
+    const customers = users.filter((user) => user.role === "customer");
+    if (!customers.length) {
+        customersEl.innerHTML = `<div class="orders-empty">No customers available.</div>`;
+        return;
+    }
+    customersEl.innerHTML = customers.map((user) => userCard(user, { roleLabel: "Customer" })).join("");
 }
 
 async function loadDashboard() {
@@ -174,9 +122,9 @@ async function loadDashboard() {
         });
         if (!data) return;
         renderSummary(data.summary || {});
-        renderReports(Array.isArray(data.reports) ? data.reports : []);
-        renderUsers(Array.isArray(data.users) ? data.users : []);
-        renderActions(Array.isArray(data.actions) ? data.actions : []);
+        const users = Array.isArray(data.users) ? data.users : [];
+        renderOwners(users);
+        renderCustomers(users);
     } catch (e) {
         showFeedback(e.message, "error");
     }
@@ -195,44 +143,6 @@ async function takeUserAction(userId, action) {
             body: JSON.stringify({ action, notes: note })
         });
         showFeedback(data?.message || "Admin action saved", "success");
-        await loadDashboard();
-    } catch (e) {
-        showFeedback(e.message, "error");
-    }
-}
-
-async function takeReportAction(reportId, targetUserId, action) {
-    const note = String(document.getElementById(`reportNote-${reportId}`)?.value || "").trim();
-
-    try {
-        const data = await fetchJson(`${API_BASE}/admin/users/${targetUserId}/action`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${adminToken}`
-            },
-            body: JSON.stringify({ action, notes: note, report_id: reportId })
-        });
-        showFeedback(data?.message || "Admin action saved", "success");
-        await loadDashboard();
-    } catch (e) {
-        showFeedback(e.message, "error");
-    }
-}
-
-async function dismissReport(reportId) {
-    const note = String(document.getElementById(`reportNote-${reportId}`)?.value || "").trim();
-
-    try {
-        const data = await fetchJson(`${API_BASE}/admin/reports/${reportId}/dismiss`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${adminToken}`
-            },
-            body: JSON.stringify({ notes: note })
-        });
-        showFeedback(data?.message || "Report dismissed", "success");
         await loadDashboard();
     } catch (e) {
         showFeedback(e.message, "error");
@@ -259,7 +169,5 @@ if (logoutBtn) {
 }
 
 window.takeUserAction = takeUserAction;
-window.takeReportAction = takeReportAction;
-window.dismissReport = dismissReport;
 
 loadDashboard();

@@ -32,6 +32,10 @@ line-height:1.7;
 color:rgba(0,0,0,0.68);
 }
 
+.admin-hero__button{
+margin-top:16px;
+}
+
 .admin-grid{
 display:grid;
 grid-template-columns:1.25fr 1fr;
