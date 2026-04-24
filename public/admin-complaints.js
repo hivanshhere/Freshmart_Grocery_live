@@ -143,6 +143,7 @@ async function takeReportAction(reportId, targetUserId, action) {
             body: JSON.stringify({ action, notes: note, report_id: reportId })
         });
         showFeedback(data?.message || "Admin action saved", "success");
+        window.alert(data?.message || "Admin action saved");
         await loadComplaints();
     } catch (e) {
         showFeedback(e.message, "error");
@@ -162,6 +163,7 @@ async function dismissReport(reportId) {
             body: JSON.stringify({ notes: note })
         });
         showFeedback(data?.message || "Report dismissed", "success");
+        window.alert(data?.message || "Report dismissed");
         await loadComplaints();
     } catch (e) {
         showFeedback(e.message, "error");

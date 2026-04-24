@@ -143,6 +143,7 @@ async function takeUserAction(userId, action) {
             body: JSON.stringify({ action, notes: note })
         });
         showFeedback(data?.message || "Admin action saved", "success");
+        window.alert(data?.message || "Admin action saved");
         await loadDashboard();
     } catch (e) {
         showFeedback(e.message, "error");
