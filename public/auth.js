@@ -37,6 +37,15 @@
         localStorage.removeItem("selectedAddressId");
     }
 
+    function clearSessionAfterFreshOpen() {
+        const browserSessionKey = "freshMartBrowserSession";
+        if (sessionStorage.getItem(browserSessionKey) === "active") return;
+        clearStoredSession();
+        sessionStorage.setItem(browserSessionKey, "active");
+    }
+
+    clearSessionAfterFreshOpen();
+
     async function fetchSessionProfile(token) {
         if (!token) return null;
 
