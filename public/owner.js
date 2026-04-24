@@ -1,4 +1,6 @@
-const API_BASE = "http://localhost:3000";
+const API_BASE = window.AppAuth?.API_BASE || (window.location.origin && /^https?:/i.test(window.location.origin)
+    ? window.location.origin
+    : "http://localhost:3000");
 
 const msgEl = document.getElementById("msg");
 const ownerAccountNoticeEl = document.getElementById("ownerAccountNotice");
@@ -197,7 +199,7 @@ async function loadStoreAndProducts() {
     try {
         setMsg("");
         const [profileData, storeData] = await Promise.all([
-            fetchJson(`${API_BASE}/auth/me`, { headers: authHeaders() }),
+            fetchJson(`${API_BASE}/auth/me?includeReports=1`, { headers: authHeaders() }),
             fetchJson(`${API_BASE}/owner/store`, { headers: authHeaders() })
         ]);
 

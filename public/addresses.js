@@ -1,4 +1,6 @@
-const API_BASE = "http://localhost:3000";
+const API_BASE = window.AppAuth?.API_BASE || (window.location.origin && /^https?:/i.test(window.location.origin)
+    ? window.location.origin
+    : "http://localhost:3000");
 
 const msgEl = document.getElementById("msg");
 const addressListEl = document.getElementById("addressList");

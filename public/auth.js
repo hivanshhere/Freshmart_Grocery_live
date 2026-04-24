@@ -1,5 +1,7 @@
 (function () {
-    const API_BASE = "http://localhost:3000";
+    const API_BASE = window.location.origin && /^https?:/i.test(window.location.origin)
+        ? window.location.origin
+        : "http://localhost:3000";
     const SESSION_KEYS = [
         "authToken",
         "userId",
@@ -50,7 +52,7 @@
         if (!token) return null;
 
         try {
-            const res = await fetch(`${API_BASE}/auth/me`, {
+            const res = await fetch(`${API_BASE}/auth/me?includeReports=0`, {
                 headers: { "Authorization": `Bearer ${token}` }
             });
             const data = await res.json().catch(() => null);

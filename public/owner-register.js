@@ -10,7 +10,7 @@ function registerOwner(){
 		return;
 	}
 
-	fetch("http://localhost:3000/auth/register-owner",{
+	fetch("/auth/register-owner",{
 		method:"POST",
 		headers:{"Content-Type":"application/json"},
 		body:JSON.stringify({name,email,password,store_name})

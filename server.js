@@ -27,8 +27,44 @@ app.use(express.json());
 const uploadsDir = path.join(__dirname, "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
 
-app.use("/uploads", express.static(uploadsDir));
-app.use(express.static("public"));
+app.use("/uploads", express.static(uploadsDir, {
+    maxAge: "7d",
+    etag: true
+}));
+app.use(express.static(path.join(__dirname, "public"), {
+    etag: true,
+    maxAge: "1d",
+    setHeaders: (res, filePath) => {
+        if (path.extname(filePath).toLowerCase() === ".html") {
+            res.setHeader("Cache-Control", "no-cache");
+            return;
+        }
+        res.setHeader("Cache-Control", "public, max-age=86400, must-revalidate");
+    }
+}));
+
+const publicDir = path.join(__dirname, "public");
+const pageAliases = new Map([
+    ["/login", "login.html"],
+    ["/register", "register.html"],
+    ["/owner-register", "owner-register.html"],
+    ["/cart", "cart.html"],
+    ["/addresses", "addresses.html"],
+    ["/customer-orders", "customer-orders.html"],
+    ["/customer-complaints", "customer-complaints.html"],
+    ["/owner-dashboard", "owner-dashboard.html"],
+    ["/owner-orders", "owner-orders.html"],
+    ["/admin-dashboard", "admin-dashboard.html"],
+    ["/admin-complaints", "admin-complaints.html"],
+    ["/store-products", "store-products.html"],
+    ["/order-placed", "order-placed.html"]
+]);
+
+for (const [routePath, fileName] of pageAliases.entries()) {
+    app.get(routePath, (req, res) => {
+        res.sendFile(path.join(publicDir, fileName));
+    });
+}
 
 const upload = multer({
     storage: multer.diskStorage({
@@ -556,6 +592,13 @@ app.post("/auth/logout", async (req, res) => {
 });
 
 app.get("/auth/me", requireAuth, asyncHandler(async (req, res) => {
+  const includeReports = String(req.query.includeReports || "").trim().toLowerCase();
+  const shouldIncludeReports = ["1", "true", "yes"].includes(includeReports);
+
+  if (!shouldIncludeReports) {
+    return res.json({ user: userDto(req.auth.user) });
+  }
+
   const reports = await ModerationReport.find({ target_user_id: req.auth.user._id })
     .sort({ updatedAt: -1, createdAt: -1 })
     .limit(10);

@@ -8,7 +8,7 @@ function login() {
         return;
     }
 
-    fetch("http://localhost:3000/auth/login", {
+    fetch("/auth/login", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"

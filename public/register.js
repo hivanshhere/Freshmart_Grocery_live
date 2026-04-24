@@ -65,7 +65,7 @@ function registerUser(){
 	const password=document.getElementById("password").value.trim();
 	const store_name=document.getElementById("storeName").value.trim().toUpperCase();
 
-	const endpoint = role==="owner" ? "http://localhost:3000/auth/register-owner" : "http://localhost:3000/auth/register-customer";
+	const endpoint = role==="owner" ? "/auth/register-owner" : "/auth/register-customer";
 	const payload = role==="owner" ? {name,email,password,store_name} : {name,email,password};
 
 	fetch(endpoint,{

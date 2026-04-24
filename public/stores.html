@@ -74,7 +74,7 @@ window.onload = function () {
 
         statusBox.innerText = "Showing stores within 5 km of your current location.";
 
-        fetch(`http://localhost:3000/stores?latitude=${latitude}&longitude=${longitude}`)
+        fetch(`/stores?latitude=${latitude}&longitude=${longitude}`)
         .then(async res => {
             const data = await res.json().catch(() => []);
             if (!res.ok) {

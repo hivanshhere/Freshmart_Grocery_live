@@ -2,6 +2,9 @@ const container = document.getElementById("cartItems")
 const msgEl = document.getElementById("msg")
 const totalAmountEl = document.getElementById("totalAmount")
 const placeAllOrdersBtn = document.getElementById("placeAllOrdersBtn")
+const API_BASE = window.AppAuth?.API_BASE || (window.location.origin && /^https?:/i.test(window.location.origin)
+    ? window.location.origin
+    : "http://localhost:3000")
 
 const addressCache = {
     loaded: false,
@@ -72,7 +75,7 @@ function normalizeStoreItems(storeData) {
 
 async function fetchStore(storeId) {
     try {
-        const res = await fetch(`${window.AppAuth?.API_BASE || "http://localhost:3000"}/store/${storeId}`)
+        const res = await fetch(`${API_BASE}/store/${storeId}`)
         if (!res.ok) return null
         return await res.json()
     } catch {
@@ -97,7 +100,7 @@ async function loadAddresses() {
     }
 
     try {
-        const res = await fetch(`${window.AppAuth?.API_BASE || "http://localhost:3000"}/user/addresses`, {
+        const res = await fetch(`${API_BASE}/user/addresses`, {
             headers: { "Authorization": `Bearer ${token}` }
         })
         const data = await res.json().catch(() => [])
@@ -126,7 +129,7 @@ async function loadSlots(storeId, selectEl) {
     if (!selectEl) return
 
     try {
-        const res = await fetch(`${window.AppAuth?.API_BASE || "http://localhost:3000"}/store/${storeId}/slots`)
+        const res = await fetch(`${API_BASE}/store/${storeId}/slots`)
         const data = await res.json()
 
         selectEl.innerHTML = ""
@@ -477,7 +480,7 @@ async function placeOrder(storeId, options) {
     }
 
     try {
-        const res = await fetch(`${window.AppAuth?.API_BASE || "http://localhost:3000"}/orders`, {
+        const res = await fetch(`${API_BASE}/orders`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
