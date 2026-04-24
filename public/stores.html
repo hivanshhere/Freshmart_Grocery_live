@@ -30,7 +30,7 @@
     </section>
 
     <section class="stores-status" id="locationStatus">
-        Checking your location to find stores within 5 km...
+        Finding all the stores near you...
     </section>
 
     <section class="store-container stores-grid" id="storeList">
@@ -72,7 +72,7 @@ window.onload = function () {
         const latitude = position.coords.latitude;
         const longitude = position.coords.longitude;
 
-        statusBox.innerText = "Showing stores within 5 km of your current location.";
+        statusBox.innerText = "Showing stores near you.";
 
         fetch(`/stores?latitude=${latitude}&longitude=${longitude}`)
         .then(async res => {
