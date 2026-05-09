@@ -1,14 +1,30 @@
+function resolveApiBase() {
+    const { hostname, port, origin } = window.location;
+    const isLocalHost = ["localhost", "127.0.0.1", "::1"].includes(hostname);
+    const isLiveServer = isLocalHost && port && port !== "3000";
+    if (isLiveServer) return "http://localhost:3000";
+    return origin && /^https?:/i.test(origin) ? origin : "http://localhost:3000";
+}
+
+const API_BASE = resolveApiBase();
+
 function login() {
     const email = document.getElementById("email").value.trim().toLowerCase();
     const password = document.getElementById("password").value.trim();
     const msg = document.getElementById("msg");
+    const showMessage = (message, type = "") => {
+        msg.innerText = message;
+        msg.className = type ? `msg--${type}` : "";
+    };
 
     if (email === "" || password === "") {
-        msg.innerText = "Enter email and password";
+        showMessage("Enter email and password", "error");
         return;
     }
 
-    fetch("/auth/login", {
+    showMessage("");
+
+    fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
@@ -18,7 +34,10 @@ function login() {
     .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-            throw new Error(data.message || "Login failed");
+            if (res.status >= 500) {
+                throw new Error("Server error");
+            }
+            throw new Error(data.message || "Server error");
         }
         return data;
     })
@@ -58,7 +77,7 @@ function login() {
         }
     })
     .catch(err => {
-        msg.innerText = err.message || "Server error";
+        showMessage(err.message || "Server error", "error");
         console.log(err);
     });
 }

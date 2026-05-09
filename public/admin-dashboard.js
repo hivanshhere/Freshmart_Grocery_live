@@ -1,6 +1,12 @@
-const API_BASE = window.AppAuth?.API_BASE || (window.location.origin && /^https?:/i.test(window.location.origin)
-    ? window.location.origin
-    : "http://localhost:3000");
+function resolveApiBase() {
+    const { hostname, port, origin } = window.location;
+    const isLocalHost = ["localhost", "127.0.0.1", "::1"].includes(hostname);
+    const isLiveServer = isLocalHost && port && port !== "3000";
+    if (isLiveServer) return "http://localhost:3000";
+    return origin && /^https?:/i.test(origin) ? origin : "http://localhost:3000";
+}
+
+const API_BASE = window.AppAuth?.API_BASE || resolveApiBase();
 
 const adminRole = localStorage.getItem("userRole");
 const adminToken = localStorage.getItem("authToken");

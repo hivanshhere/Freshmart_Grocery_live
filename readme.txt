@@ -41,13 +41,13 @@ A full-stack web application that allows users to browse grocery products, place
 
 **Database**
 
-* MongoDB
+* MongoDB (via Mongoose)
 
 **Other Tools**
 
 * dotenv (for environment variables)
-* multer (for file uploads)
 * cors
+* multer (for file uploads)
 * mongoose (MongoDB ODM)
 
 ---
@@ -150,12 +150,14 @@ You should see:
 ```
 Server running on port 3000
 MongoDB connected successfully
+http://localhost:3000
 ```
 
 ---
 
 ### 7️⃣ Run the Project
 
+<<<<<<< HEAD
 Open browser and go to:
 
 ```
@@ -196,6 +198,8 @@ Make sure `.env` file is properly configured, otherwise MongoDB will not connect
 * Node.js must be installed
 * MongoDB must be running OR Atlas connection should be correct
 * Port 3000 should be free
+* Make sure your MongoDB cluster is reachable
+* Set `MONGO_URI` correctly in `.env` (or your hosting provider's env vars)
 * Do not upload `.env` file to GitHub
 
 ---

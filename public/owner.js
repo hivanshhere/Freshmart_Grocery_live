@@ -20,8 +20,43 @@ const pickupAvailableEl = document.getElementById("pickupAvailable");
 const slotTimeInputEl = document.getElementById("slotTimeInput");
 const slotListEl = document.getElementById("slotList");
 const productFormEl = document.getElementById("productForm");
+const addProductFieldErrors = {
+    name: document.getElementById("pnameError"),
+    description: document.getElementById("pdescriptionError"),
+    price: document.getElementById("ppriceError"),
+    quantity: document.getElementById("pquantityError"),
+    unit: document.getElementById("punitError")
+};
 
 let currentStore = null;
+
+function clearAddProductErrors() {
+    Object.values(addProductFieldErrors).forEach((el) => {
+        if (el) el.innerText = "";
+    });
+}
+
+function setAddProductError(field, message) {
+    clearAddProductErrors();
+    const el = addProductFieldErrors[field];
+    if (el) el.innerText = message || "";
+}
+
+function bindUppercaseInput(inputEl) {
+    if (!inputEl) return;
+    inputEl.addEventListener("input", () => {
+        const start = inputEl.selectionStart;
+        const end = inputEl.selectionEnd;
+        const next = String(inputEl.value || "").toUpperCase();
+        if (inputEl.value !== next) inputEl.value = next;
+        if (typeof start === "number" && typeof end === "number") {
+            inputEl.setSelectionRange(start, end);
+        }
+    });
+}
+
+bindUppercaseInput(document.getElementById("storeName"));
+bindUppercaseInput(editStoreNameInput);
 
 function ownerToken() {
     return window.AppAuth?.getToken ? window.AppAuth.getToken() : (localStorage.getItem("authToken") || "");
@@ -34,25 +69,53 @@ function formatAdminAction(action) {
     if (normalized === "remove") return "Removed";
     if (normalized === "dismissed") return "Dismissed";
     if (normalized === "activate") return "Reactivated";
+    if (normalized === "message") return "Admin Message";
     return "Under Review";
 }
 
-function showOwnerNotice(profile, moderationReports = []) {
+function formatWarningMessage(warning) {
+    return String(warning?.notes || warning?.admin_notes || warning?.message || "").trim();
+}
+
+function showOwnerNotice(profile, moderationReports = [], warningActions = []) {
     if (!ownerAccountNoticeEl) return;
 
     const status = String(profile?.account_status || localStorage.getItem("accountStatus") || "active").toLowerCase();
     const warningCount = Number(profile?.warning_count ?? localStorage.getItem("warningCount") ?? 0);
     const banReason = String(profile?.ban_reason || localStorage.getItem("banReason") || "").trim();
     const visibleReports = Array.isArray(moderationReports)
-        ? moderationReports.filter((report) => ["resolved", "dismissed"].includes(String(report.status || "").toLowerCase()))
+        ? moderationReports.filter((report) => {
+            const action = String(report.resolution_action || "").toLowerCase();
+            const statusValue = String(report.status || "").toLowerCase();
+            return action === "warning" && statusValue === "resolved";
+        })
         : [];
+    const visibleWarnings = Array.isArray(warningActions)
+        ? warningActions.filter((warning) => formatWarningMessage(warning))
+        : [];
+    const hasWarning = status === "warned" || warningCount > 0 || Boolean(banReason) || visibleWarnings.length > 0;
 
-    if (status !== "warned" && warningCount <= 0 && visibleReports.length === 0) {
+    if (!hasWarning) {
         ownerAccountNoticeEl.style.display = "none";
         ownerAccountNoticeEl.innerHTML = "";
         ownerAccountNoticeEl.className = "owner-notice";
         return;
     }
+
+    const warningsHtml = visibleWarnings.length
+        ? `
+            <div class="owner-notice__list">
+                ${visibleWarnings.map((warning) => `
+                    <div class="owner-notice__item">
+                        <h4>Warning From Admin</h4>
+                        <div class="owner-notice__meta">Sent by ${escapeHtml(warning.admin_name || "Admin")}</div>
+                        <span class="owner-notice__label">Warning Message</span>
+                        <p>${escapeHtml(formatWarningMessage(warning))}</p>
+                    </div>
+                `).join("")}
+            </div>
+        `
+        : "";
 
     const reportsHtml = visibleReports.length
         ? `
@@ -63,7 +126,7 @@ function showOwnerNotice(profile, moderationReports = []) {
                         <div class="owner-notice__meta">Reported by ${escapeHtml(report.reporter_name || "Customer")} (${escapeHtml(report.reporter_role || "customer")})${report.store_name ? ` for ${escapeHtml(report.store_name)}` : ""}</div>
                         <span class="owner-notice__label">Customer Issue</span>
                         <p>${escapeHtml(report.message || "No details provided.")}</p>
-                        <span class="owner-notice__label">Admin Note</span>
+                        <span class="owner-notice__label">${String(report.resolution_action || "").toLowerCase() === "message" ? "Admin Message" : "Admin Note"}</span>
                         <p>${escapeHtml(report.admin_notes || "No admin note added.")}</p>
                     </div>
                 `).join("")}
@@ -72,12 +135,15 @@ function showOwnerNotice(profile, moderationReports = []) {
         : "";
 
     ownerAccountNoticeEl.style.display = "block";
-    ownerAccountNoticeEl.className = "owner-notice owner-notice--warned";
+    ownerAccountNoticeEl.className = "owner-notice owner-notice--error";
     ownerAccountNoticeEl.innerHTML = `
-        <h3>Admin Warning On Your Account</h3>
-        <p>Your store owner account has received ${warningCount} warning${warningCount === 1 ? "" : "s"} from the admin.</p>
-        <p>${escapeHtml(banReason || "Please review your recent activity and follow the platform rules to avoid stronger action.")}</p>
-        ${reportsHtml}
+        <details class="owner-notice__details">
+            <summary>Warning${warningCount > 1 ? ` (${warningCount})` : ""}</summary>
+            ${hasWarning ? `<p>Your store owner account has received ${warningCount} warning${warningCount === 1 ? "" : "s"} from the admin.</p>` : ""}
+            ${hasWarning ? `<p><strong>Warning:</strong> ${escapeHtml(banReason || "Please review your recent activity and follow the platform rules to avoid stronger action.")}</p>` : ""}
+            ${warningsHtml}
+            ${reportsHtml}
+        </details>
     `;
 }
 
@@ -133,17 +199,17 @@ function setStoreUi(store) {
         return;
     }
 
-    storeDisplayNameEl.innerText = store.store_name;
+    storeDisplayNameEl.innerText = String(store.store_name || "").toUpperCase();
     storeDisplayIdEl.innerText = String(store.display_id || store.id);
     createStoreSectionEl.style.display = "none";
     editStoreSectionEl.style.display = "block";
-    editStoreNameInput.value = store.store_name;
+    editStoreNameInput.value = String(store.store_name || "").toUpperCase();
     storeLatitudeEl.value = store.latitude ?? "";
     storeLongitudeEl.value = store.longitude ?? "";
     addProductBtn.disabled = false;
 
     localStorage.setItem("storeId", String(store.id));
-    localStorage.setItem("storeName", String(store.store_name));
+    localStorage.setItem("storeName", String(store.store_name || "").toUpperCase());
 
     deliveryAvailableEl.checked = !!store.delivery_available;
     deliveryChargeEl.value = Number(store.delivery_charge || 0);
@@ -170,7 +236,7 @@ function renderProducts(products) {
                 <h3>${escapeHtml(product.name)}</h3>
                 ${description ? `<p class="product-description">${escapeHtml(description)}</p>` : ""}
                 <p>Price: Rs. ${price.toFixed(2)} / ${quantity} ${escapeHtml(product.unit || "")}</p>
-                <button type="button" class="store-card__remove-btn" onclick="removeProduct(${product.id})">Remove Product</button>
+                <button type="button" class="store-card__remove-btn" onclick="removeProduct('${escapeHtml(product.id)}')">Remove Product</button>
             </div>
         `;
     }).join("");
@@ -188,7 +254,7 @@ function renderSlots(slots) {
             ${slots.map((slot) => `
                 <div class="slot-row">
                     <span class="slot-row__time">${escapeHtml(slot.slot_time)}</span>
-                    <button type="button" class="slot-row__btn" onclick="removeTimeSlot(${slot.id})">Remove</button>
+                    <button type="button" class="slot-row__btn" onclick="removeTimeSlot('${escapeHtml(slot.id)}')">Remove</button>
                 </div>
             `).join("")}
         </div>
@@ -205,12 +271,13 @@ async function loadStoreAndProducts() {
 
         const ownerProfile = profileData?.user || null;
         const moderationReports = profileData?.moderation_reports || [];
+        const warningActions = profileData?.warning_actions || [];
         if (ownerProfile) {
             localStorage.setItem("accountStatus", ownerProfile.account_status || "active");
             localStorage.setItem("warningCount", String(ownerProfile.warning_count || 0));
             localStorage.setItem("banReason", ownerProfile.ban_reason || "");
         }
-        showOwnerNotice(ownerProfile, moderationReports);
+        showOwnerNotice(ownerProfile, moderationReports, warningActions);
 
         currentStore = storeData;
         setStoreUi(currentStore);
@@ -230,7 +297,7 @@ async function loadStoreAndProducts() {
 }
 
 async function createStore() {
-    const storeName = document.getElementById("storeName").value.trim();
+    const storeName = document.getElementById("storeName").value.trim().toUpperCase();
     if (!storeName) {
         setMsg("Enter store name", "error");
         return;
@@ -257,7 +324,7 @@ async function updateStoreName() {
         return;
     }
 
-    const storeName = editStoreNameInput.value.trim();
+    const storeName = editStoreNameInput.value.trim().toUpperCase();
     if (!storeName) {
         setMsg("Enter store name", "error");
         return;
@@ -389,11 +456,16 @@ async function addProduct(event) {
     const quantity = Number(document.getElementById("pquantity").value);
     const unit = document.getElementById("punit").value;
     const imageFile = document.getElementById("pimage").files[0];
+    const allowedUnits = ["kg", "g", "litre", "ml", "piece", "pack"];
 
-    if (!name || !description || !Number.isFinite(price) || price <= 0 || !Number.isFinite(quantity) || quantity <= 0 || !unit) {
-        setMsg("Enter product name, description, valid price, quantity and unit", "error");
-        return;
-    }
+    if (!name) return setAddProductError("name", "Enter product name");
+    if (name.length < 2) return setAddProductError("name", "Min 2 letters");
+    if (!description) return setAddProductError("description", "Enter description");
+    if (description.length < 5) return setAddProductError("description", "Min 5 chars");
+    if (!Number.isFinite(price) || price <= 0) return setAddProductError("price", "Invalid price");
+    if (!Number.isFinite(quantity) || quantity <= 0) return setAddProductError("quantity", "Invalid quantity");
+    if (!allowedUnits.includes(unit)) return setAddProductError("unit", "Invalid unit");
+    clearAddProductErrors();
 
     const formData = new FormData();
     formData.append("name", name);

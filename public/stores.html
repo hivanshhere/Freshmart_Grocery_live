@@ -29,6 +29,9 @@
         <p>Browse nearby stores, compare delivery and pickup availability, and open the one you want to shop from.</p>
     </section>
 
+    <section id="customerAccountWarning" class="store-account-warning" style="display:none;"></section>
+    <section id="customerReviewMessages" class="store-account-review" style="display:none;"></section>
+
     <section class="stores-status" id="locationStatus">
         Finding all the stores near you...
     </section>
@@ -44,12 +47,100 @@
 // Login check: only logged-in users can access stores
 (async function requireLogin(){
     if (!window.AppAuth?.validateCurrentSession) return;
-    await window.AppAuth.validateCurrentSession({
+    const session = await window.AppAuth.validateCurrentSession({
         expectedRole: "customer",
         afterLogin: "stores.html"
     });
+    showCustomerWarning(session?.user, session?.warning_actions || []);
+    showCustomerReviewMessages(session?.moderation_reports || []);
 })();
 
+function escapeWarningHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function getWarningText(warning) {
+    return String(warning?.notes || warning?.admin_notes || warning?.message || "").trim();
+}
+
+function showCustomerWarning(profile, warningActions) {
+    const warningEl = document.getElementById("customerAccountWarning");
+    if (!warningEl) return;
+
+    const status = String(profile?.account_status || localStorage.getItem("accountStatus") || "active").toLowerCase();
+    const warningCount = Number(profile?.warning_count ?? localStorage.getItem("warningCount") ?? 0);
+    const banReason = String(profile?.ban_reason || localStorage.getItem("banReason") || "").trim();
+    const warnings = Array.isArray(warningActions)
+        ? warningActions.filter((warning) => getWarningText(warning))
+        : [];
+
+    if (status !== "warned" && warningCount <= 0 && !banReason && warnings.length === 0) {
+        warningEl.style.display = "none";
+        warningEl.innerHTML = "";
+        return;
+    }
+
+    const warningItems = warnings.length
+        ? warnings.map((warning) => `
+            <div class="store-account-warning__item">
+                <span>Warning Message</span>
+                <strong>${escapeWarningHtml(getWarningText(warning))}</strong>
+            </div>
+        `).join("")
+        : `
+            <div class="store-account-warning__item">
+                <span>Warning Message</span>
+                <strong>${escapeWarningHtml(banReason || "Please review your recent activity and follow the platform rules to avoid stronger action.")}</strong>
+            </div>
+        `;
+
+    warningEl.style.display = "block";
+    warningEl.innerHTML = `
+        <details class="store-account-warning__details">
+            <summary>Warning${warningCount > 1 ? ` (${warningCount})` : ""}</summary>
+            <p>This is a warning from the admin. Please read the exact message below.</p>
+            ${warningItems}
+        </details>
+    `;
+}
+
+function showCustomerReviewMessages(moderationReports) {
+    const reviewEl = document.getElementById("customerReviewMessages");
+    if (!reviewEl) return;
+
+    const reviewMessages = Array.isArray(moderationReports)
+        ? moderationReports.filter((report) => {
+            const isReview = String(report.report_type || "").toLowerCase() === "review";
+            const isMessage = String(report.resolution_action || "").toLowerCase() === "message";
+            return isReview && isMessage && String(report.admin_notes || "").trim();
+        })
+        : [];
+
+    if (!reviewMessages.length) {
+        reviewEl.style.display = "none";
+        reviewEl.innerHTML = "";
+        return;
+    }
+
+    reviewEl.style.display = "block";
+    reviewEl.innerHTML = `
+        <details class="store-account-review__details">
+            <summary>Review${reviewMessages.length > 1 ? ` (${reviewMessages.length})` : ""}</summary>
+            <p>Please read the exact review message sent by the admin.</p>
+            ${reviewMessages.map((report) => `
+                <div class="store-account-review__item">
+                    <span>Review Message</span>
+                    <strong>${escapeWarningHtml(report.admin_notes)}</strong>
+                </div>
+            `).join("")}
+        </details>
+    `;
+}
 
 // Fetch stores on page load
 window.onload = function () {
@@ -74,7 +165,8 @@ window.onload = function () {
 
         statusBox.innerText = "Showing stores near you.";
 
-        fetch(`/stores?latitude=${latitude}&longitude=${longitude}`)
+        const apiBase = window.AppAuth?.API_BASE || window.location.origin;
+        fetch(`${apiBase}/stores?latitude=${latitude}&longitude=${longitude}`)
         .then(async res => {
             const data = await res.json().catch(() => []);
             if (!res.ok) {

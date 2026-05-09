@@ -41,6 +41,17 @@ font-size:22px;
 color:inherit;
 }
 
+.owner-notice__details summary{
+cursor:pointer;
+font-size:22px;
+font-weight:800;
+color:inherit;
+}
+
+.owner-notice__details summary::marker{
+color:inherit;
+}
+
 .owner-notice p{
 margin:6px 0 0;
 line-height:1.6;

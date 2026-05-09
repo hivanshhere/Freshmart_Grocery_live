@@ -161,8 +161,8 @@ function resetAddressForm() {
 
 function startEditAddress(address) {
     if (!address) return;
-    editingAddressId = Number(address.id);
-    if (!Number.isFinite(editingAddressId)) return;
+    editingAddressId = String(address.id || "").trim();
+    if (!editingAddressId) return;
 
     if (addressTypeEl) addressTypeEl.value = address.type || "Home";
     if (customerNameEl) customerNameEl.value = toUppercaseValue(address.customer_name);
@@ -186,8 +186,8 @@ function startEditAddress(address) {
 
 async function deleteAddress(addressId) {
     if (!await ensureCustomerLogin()) return;
-    const id = Number(addressId);
-    if (!Number.isFinite(id)) return;
+    const id = String(addressId || "").trim();
+    if (!id) return;
 
     const ok = confirm("Delete this address?");
     if (!ok) return;
@@ -275,7 +275,7 @@ async function saveAddress() {
     const payload = validateAddressForm();
     if (!payload) return;
 
-    const isEdit = Number.isFinite(editingAddressId);
+    const isEdit = !!editingAddressId;
     const ok = confirm(isEdit ? "Update this address?" : "Save this address?");
     if (!ok) return;
 

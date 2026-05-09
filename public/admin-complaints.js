@@ -1,6 +1,12 @@
-const API_BASE = window.AppAuth?.API_BASE || (window.location.origin && /^https?:/i.test(window.location.origin)
-    ? window.location.origin
-    : "http://localhost:3000");
+function resolveApiBase() {
+    const { hostname, port, origin } = window.location;
+    const isLocalHost = ["localhost", "127.0.0.1", "::1"].includes(hostname);
+    const isLiveServer = isLocalHost && port && port !== "3000";
+    if (isLiveServer) return "http://localhost:3000";
+    return origin && /^https?:/i.test(origin) ? origin : "http://localhost:3000";
+}
+
+const API_BASE = window.AppAuth?.API_BASE || resolveApiBase();
 
 const adminRole = localStorage.getItem("userRole");
 const adminToken = localStorage.getItem("authToken");
@@ -37,6 +43,7 @@ function statusClass(status) {
     const normalized = String(status || "").toLowerCase();
     if (normalized === "resolved") return "status-pill status-pill--resolved";
     if (normalized === "dismissed") return "status-pill status-pill--dismissed";
+    if (normalized === "message") return "status-pill status-pill--resolved";
     return "status-pill status-pill--placed";
 }
 
@@ -60,12 +67,14 @@ function renderReports(reports) {
         return;
     }
 
-    reportsEl.innerHTML = reports.map((report) => `
+    reportsEl.innerHTML = reports.map((report) => {
+        const isReview = String(report.report_type || "").toLowerCase() === "review";
+        return `
         <article class="admin-card">
             <div class="admin-card__top">
                 <div>
                     <h4>${escapeHtml(report.report_type)} for ${escapeHtml(report.target_name)}</h4>
-                    <p class="${statusClass(report.status)}">${escapeHtml(report.status)}</p>
+                    <p class="${statusClass(report.resolution_action || report.status)}">${escapeHtml(report.resolution_action || report.status)}</p>
                 </div>
                 <div>
                     <strong>Order #${escapeHtml(report.order_display_number || report.order_id || "")}</strong>
@@ -87,13 +96,15 @@ function renderReports(reports) {
             <input class="admin-card__note" id="reportNote-${escapeHtml(report.id)}" placeholder="Admin note for this action">
 
             <div class="admin-card__actions">
+                ${isReview ? `<button type="button" class="orders-btn orders-btn--primary" onclick="sendReviewMessage('${escapeHtml(report.id)}')">Send Review Message</button>` : ""}
                 <button type="button" class="orders-btn orders-btn--primary" onclick="takeReportAction('${escapeHtml(report.id)}', '${escapeHtml(report.target_user_id)}', 'warning')">Issue Warning</button>
                 <button type="button" class="orders-btn orders-btn--danger" onclick="takeReportAction('${escapeHtml(report.id)}', '${escapeHtml(report.target_user_id)}', 'ban')">Ban User</button>
                 <button type="button" class="orders-btn orders-btn--danger" onclick="takeReportAction('${escapeHtml(report.id)}', '${escapeHtml(report.target_user_id)}', 'remove')">Remove User</button>
                 <button type="button" class="orders-btn orders-btn--ghost" onclick="dismissReport('${escapeHtml(report.id)}')">Dismiss Report</button>
             </div>
         </article>
-    `).join("");
+    `;
+    }).join("");
 }
 
 function renderActions(actions) {
@@ -172,6 +183,30 @@ async function dismissReport(reportId) {
     }
 }
 
+async function sendReviewMessage(reportId) {
+    const note = String(document.getElementById(`reportNote-${reportId}`)?.value || "").trim();
+    if (!note) {
+        showFeedback("Enter the message to send about this review.", "error");
+        return;
+    }
+
+    try {
+        const data = await fetchJson(`${API_BASE}/admin/reports/${reportId}/message`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${adminToken}`
+            },
+            body: JSON.stringify({ notes: note })
+        });
+        showFeedback(data?.message || "Review message sent", "success");
+        window.alert(data?.message || "Review message sent");
+        await loadComplaints();
+    } catch (e) {
+        showFeedback(e.message, "error");
+    }
+}
+
 async function logoutAdmin() {
     try {
         await fetch(`${API_BASE}/auth/logout`, {
@@ -193,5 +228,6 @@ if (logoutBtn) {
 
 window.takeReportAction = takeReportAction;
 window.dismissReport = dismissReport;
+window.sendReviewMessage = sendReviewMessage;
 
 loadComplaints();

@@ -126,6 +126,11 @@ font-size:14px;
 line-height:1.5;
 }
 
+#msg.msg--error{
+color:#b42318;
+font-weight:700;
+}
+
 @media (max-width: 600px){
 	.login-main{
 		padding:22px 12px 28px;

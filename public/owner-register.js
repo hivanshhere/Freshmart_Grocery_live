@@ -1,3 +1,13 @@
+function resolveApiBase(){
+	const {hostname,port,origin}=window.location;
+	const isLocalHost=["localhost","127.0.0.1","::1"].includes(hostname);
+	const isLiveServer=isLocalHost&&port&&port!=="3000";
+	if(isLiveServer) return "http://localhost:3000";
+	return origin&&/^https?:/i.test(origin)?origin:"http://localhost:3000";
+}
+
+const API_BASE=resolveApiBase();
+
 function registerOwner(){
 	const name=document.getElementById("name").value.trim();
 	const email=document.getElementById("email").value.trim();
@@ -10,7 +20,7 @@ function registerOwner(){
 		return;
 	}
 
-	fetch("/auth/register-owner",{
+	fetch(`${API_BASE}/auth/register-owner`,{
 		method:"POST",
 		headers:{"Content-Type":"application/json"},
 		body:JSON.stringify({name,email,password,store_name})

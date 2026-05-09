@@ -1,3 +1,13 @@
+function resolveApiBase(){
+	const {hostname,port,origin}=window.location;
+	const isLocalHost=["localhost","127.0.0.1","::1"].includes(hostname);
+	const isLiveServer=isLocalHost&&port&&port!=="3000";
+	if(isLiveServer) return "http://localhost:3000";
+	return origin&&/^https?:/i.test(origin)?origin:"http://localhost:3000";
+}
+
+const API_BASE=resolveApiBase();
+
 function setMsg(text){
 	const msg=document.getElementById("msg");
 	if(msg) msg.innerText=text||"";
@@ -65,7 +75,7 @@ function registerUser(){
 	const password=document.getElementById("password").value.trim();
 	const store_name=document.getElementById("storeName").value.trim().toUpperCase();
 
-	const endpoint = role==="owner" ? "/auth/register-owner" : "/auth/register-customer";
+	const endpoint = role==="owner" ? `${API_BASE}/auth/register-owner` : `${API_BASE}/auth/register-customer`;
 	const payload = role==="owner" ? {name,email,password,store_name} : {name,email,password};
 
 	fetch(endpoint,{

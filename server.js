@@ -35,7 +35,8 @@ app.use(express.static(path.join(__dirname, "public"), {
     etag: true,
     maxAge: "1d",
     setHeaders: (res, filePath) => {
-        if (path.extname(filePath).toLowerCase() === ".html") {
+        const ext = path.extname(filePath).toLowerCase();
+        if ([".html", ".js", ".css"].includes(ext)) {
             res.setHeader("Cache-Control", "no-cache");
             return;
         }
@@ -324,12 +325,12 @@ function calculateDeliveryFee(store, itemsTotal) {
 }
 
 async function getNextOwnerOrderNumber(storeId) {
-  const latest = await Order.findOne({ store_id: storeId }).sort({ owner_order_number: -1, _id: -1 });
+  const latest = await Order.findOne({ store_id: storeId, owner_deleted: false }).sort({ owner_order_number: -1, _id: -1 });
   return (Number(latest?.owner_order_number) || 0) + 1;
 }
 
 async function getNextCustomerOrderNumber(customerId) {
-  const latest = await Order.findOne({ customer_id: customerId }).sort({ customer_order_number: -1, _id: -1 });
+  const latest = await Order.findOne({ customer_id: customerId, customer_deleted: false }).sort({ customer_order_number: -1, _id: -1 });
   return (Number(latest?.customer_order_number) || 0) + 1;
 }
 
@@ -599,12 +600,24 @@ app.get("/auth/me", requireAuth, asyncHandler(async (req, res) => {
     return res.json({ user: userDto(req.auth.user) });
   }
 
-  const reports = await ModerationReport.find({ target_user_id: req.auth.user._id })
+  const reports = await ModerationReport.find({
+    $or: [
+      { target_user_id: req.auth.user._id },
+      { reporter_id: req.auth.user._id }
+    ]
+  })
     .sort({ updatedAt: -1, createdAt: -1 })
     .limit(10);
+  const warningActions = await ModerationAction.find({
+    target_user_id: req.auth.user._id,
+    action_type: "warning"
+  }).sort({ createdAt: -1 });
   const reporterIds = [...new Set(reports.map((report) => String(report.reporter_id || "")).filter(Boolean))];
   const storeIds = [...new Set(reports.map((report) => String(report.store_id || "")).filter(Boolean))];
-  const adminIds = [...new Set(reports.map((report) => String(report.resolved_by || "")).filter(Boolean))];
+  const adminIds = [...new Set([
+    ...reports.map((report) => String(report.resolved_by || "")),
+    ...warningActions.map((action) => String(action.admin_id || ""))
+  ].filter(Boolean))];
   const [reporters, stores, admins] = await Promise.all([
     User.find({ _id: { $in: reporterIds } }),
     Store.find({ _id: { $in: storeIds } }),
@@ -631,6 +644,13 @@ app.get("/auth/me", requireAuth, asyncHandler(async (req, res) => {
       reporter_role: reporterMap.get(String(report.reporter_id || ""))?.role || report.reporter_role || "",
       store_name: storeMap.get(String(report.store_id || ""))?.store_name || "",
       resolved_by_name: adminMap.get(String(report.resolved_by || ""))?.name || ""
+    })),
+    warning_actions: warningActions.map((action) => ({
+      id: String(action._id),
+      action_type: action.action_type,
+      notes: action.notes || "",
+      created_at: action.createdAt,
+      admin_name: adminMap.get(String(action.admin_id || ""))?.name || "Admin"
     }))
   });
 }));
@@ -1009,7 +1029,7 @@ app.delete("/user/addresses/:addressId", requireAuth, requireCustomer, asyncHand
 }));
 
 app.post("/orders", requireAuth, requireCustomer, async (req, res) => {
-  const { store_id, delivery_type, address_id, slot_id, items } = req.body || {};
+  const { store_id, delivery_type, address_id, slot_id, delivery_fee, items } = req.body || {};
 
   if (!store_id || !items || items.length === 0) {
     return res.status(400).json({ message: "Invalid data" });
@@ -1026,41 +1046,19 @@ app.post("/orders", requireAuth, requireCustomer, async (req, res) => {
   }
 
   let address = null;
-  if (orderDeliveryType === "delivery") {
-    if (!store.delivery_available) {
-      return res.status(400).json({ message: "This store does not offer delivery" });
-    }
-    if (!address_id) {
-      return res.status(400).json({ message: "Address is required for delivery orders" });
-    }
-
+  if (address_id && mongoose.isValidObjectId(address_id)) {
     address = await Address.findOne({
       _id: address_id,
       customer_id: req.auth.user._id
     });
-
-    if (!address) {
-      return res.status(404).json({ message: "Selected address not found" });
-    }
   }
 
   let slot = null;
-  if (orderDeliveryType === "pickup") {
-    if (!store.pickup_available) {
-      return res.status(400).json({ message: "This store does not offer pickup" });
-    }
-    if (!slot_id) {
-      return res.status(400).json({ message: "Pickup slot is required" });
-    }
-
+  if (slot_id && mongoose.isValidObjectId(slot_id)) {
     slot = await Slot.findOne({
       _id: slot_id,
       store_id: store._id
     });
-
-    if (!slot) {
-      return res.status(404).json({ message: "Selected pickup slot not found" });
-    }
   }
 
   let itemsTotal = 0;
@@ -1088,8 +1086,8 @@ app.post("/orders", requireAuth, requireCustomer, async (req, res) => {
     return res.status(400).json({ message: "Invalid items" });
   }
 
-  const deliveryFee = orderDeliveryType === "delivery" ? calculateDeliveryFee(store, itemsTotal) : 0;
-  const total = itemsTotal + deliveryFee;
+  const fee = Number(delivery_fee) || 0;
+  const total = itemsTotal + fee;
   const ownerOrderNumber = await getNextOwnerOrderNumber(store._id);
   const customerOrderNumber = await getNextCustomerOrderNumber(req.auth.user._id);
 
@@ -1099,11 +1097,11 @@ app.post("/orders", requireAuth, requireCustomer, async (req, res) => {
     items: formattedItems,
     total_amount: total,
     delivery_type: orderDeliveryType,
-    address_id: orderDeliveryType === "delivery" ? address_id : null,
+    address_id: address?._id || null,
     delivery_address_snapshot: addressSnapshot(address),
-    slot_id: orderDeliveryType === "pickup" ? slot_id : null,
+    slot_id: slot?._id || null,
     slot_time_snapshot: slot?.slot_time || "",
-    delivery_fee: deliveryFee,
+    delivery_fee: fee,
     owner_order_number: ownerOrderNumber,
     customer_order_number: customerOrderNumber,
     owner_notification_pending: true
@@ -1115,12 +1113,75 @@ app.post("/orders", requireAuth, requireCustomer, async (req, res) => {
     customer_order_number: customerOrderNumber,
     owner_order_number: ownerOrderNumber,
     delivery_type: orderDeliveryType,
-    delivery_fee: deliveryFee,
+    delivery_fee: fee,
     address_id: order.address_id,
     slot_id: order.slot_id,
     total_amount: total
   });
 });
+
+app.post("/place-order", asyncHandler(async (req, res) => {
+  const { user_id, store_id } = req.body || {};
+
+  if (!mongoose.isValidObjectId(user_id) || !mongoose.isValidObjectId(store_id)) {
+    return res.status(400).json({ message: "Invalid data" });
+  }
+
+  const [customer, store] = await Promise.all([
+    User.findOne({ _id: user_id, role: "customer" }),
+    getActiveStoreById(store_id)
+  ]);
+
+  if (!customer || !canUsePlatform(customer.account_status)) {
+    return res.status(404).json({ message: "Customer not found" });
+  }
+
+  if (!store) {
+    return res.status(404).json({ message: "Store not found" });
+  }
+
+  let totalAmount = 0;
+  const sourceItems = Array.isArray(req.body?.items) ? req.body.items : [];
+  const items = sourceItems.map((item) => {
+    const name = String(item?.name || item?.product_name || "").trim();
+    const qty = Number(item?.qty ?? item?.quantity ?? 0) || 0;
+    const unitPrice = Number(item?.unit_price ?? item?.price ?? 0) || 0;
+    const lineTotal = qty * unitPrice;
+
+    return {
+      name,
+      product_name: name,
+      qty,
+      unit_price: unitPrice,
+      line_total: lineTotal
+    };
+  }).filter((item) => item.name && item.qty > 0);
+  totalAmount = items.reduce((sum, item) => sum + item.line_total, 0);
+
+  const ownerOrderNumber = await getNextOwnerOrderNumber(store._id);
+  const customerOrderNumber = await getNextCustomerOrderNumber(customer._id);
+  const deliveryType = store.delivery_available ? "delivery" : (store.pickup_available ? "pickup" : "delivery");
+
+  const order = await Order.create({
+    customer_id: customer._id,
+    store_id: store._id,
+    items,
+    total_amount: totalAmount,
+    delivery_type: deliveryType,
+    delivery_fee: 0,
+    status: "placed",
+    owner_order_number: ownerOrderNumber,
+    customer_order_number: customerOrderNumber,
+    owner_notification_pending: true
+  });
+
+  res.json({
+    success: true,
+    order_id: order._id,
+    customer_order_number: customerOrderNumber,
+    owner_order_number: ownerOrderNumber
+  });
+}));
 
 app.get("/user/orders", requireAuth, requireCustomer, async (req, res) => {
   const orders = await Order.find({
@@ -1398,6 +1459,27 @@ app.post("/admin/users/:userId/action", requireAuth, requireAdmin, asyncHandler(
   res.json({ message: "Admin action saved" });
 }));
 
+app.post("/admin/reports/:reportId/message", requireAuth, requireAdmin, asyncHandler(async (req, res) => {
+  const adminNotes = String(req.body?.notes || "").trim();
+
+  if (!mongoose.isValidObjectId(req.params.reportId)) {
+    return res.status(400).json({ message: "Invalid report" });
+  }
+  if (!adminNotes) {
+    return res.status(400).json({ message: "Enter the message to send about this review" });
+  }
+
+  const report = await ModerationReport.findById(req.params.reportId);
+  if (!report) return res.status(404).json({ message: "Report not found" });
+  if (String(report.report_type || "").toLowerCase() !== "review") {
+    return res.status(400).json({ message: "Messages can only be sent for reviews" });
+  }
+
+  await resolveReport(report._id, req.auth.user._id, "message", adminNotes);
+  await createModerationAction(req.auth.user._id, report.target_user_id, report._id, "message", adminNotes);
+  res.json({ message: "Review message sent" });
+}));
+
 app.post("/admin/reports/:reportId/dismiss", requireAuth, requireAdmin, asyncHandler(async (req, res) => {
   const adminNotes = String(req.body?.notes || "").trim();
   await rejectReport(req.params.reportId, req.auth.user._id, adminNotes || "Report dismissed by admin");
@@ -1533,14 +1615,20 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = Number(process.env.PORT) || 3000;
+const MONGO_URI = String(
+  process.env.MONGO_URI ||
+  process.env.MONGODB_URI ||
+  process.env.DATABASE_URL ||
+  ""
+).trim();
 
 async function startServer() {
   try {
-    if (!process.env.MONGO_URI) {
-      throw new Error("MONGO_URI is missing in .env");
+    if (!MONGO_URI) {
+      throw new Error("Mongo connection string is missing. Set MONGO_URI (or MONGODB_URI / DATABASE_URL).");
     }
 
-    await mongoose.connect(process.env.MONGO_URI, {
+    await mongoose.connect(MONGO_URI, {
       serverSelectionTimeoutMS: 15000
     });
 
