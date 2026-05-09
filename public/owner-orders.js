@@ -76,31 +76,55 @@ function showFeedback(message, type) {
     feedbackEl.innerHTML = `<div class="orders-feedback orders-feedback--${type === "error" ? "error" : "success"}">${escapeHtml(message)}</div>`;
 }
 
-function renderOwnerReviewMessages(reports = []) {
+function renderOwnerReviewMessages(reports = [], adminActions = [], profile = {}) {
     if (!ownerReviewMessagesEl) return;
 
+    const userId = String(profile?.id || localStorage.getItem("userId") || "");
     const reviewMessages = Array.isArray(reports)
         ? reports.filter((report) => {
+            const isForMe = String(report.target_user_id || "") === userId;
             const isReview = String(report.report_type || "").toLowerCase() === "review";
-            const isMessage = String(report.resolution_action || "").toLowerCase() === "message";
-            return isReview && isMessage && String(report.admin_notes || "").trim();
+            const rating = Number(report.rating) || 0;
+            return isForMe && isReview && rating >= 4 && String(report.message || "").trim();
+        })
+        : [];
+    const adminMessages = Array.isArray(adminActions)
+        ? adminActions.filter((action) => String(action.action_type || "").toLowerCase() === "message" && String(action.notes || "").trim())
+        : [];
+    const reviewAdminMessages = Array.isArray(reports)
+        ? reports.filter((report) => {
+            const isForMe = String(report.target_user_id || "") === userId;
+            return isForMe && String(report.resolution_action || "").toLowerCase() === "message" && String(report.admin_notes || "").trim();
         })
         : [];
 
-    if (!reviewMessages.length) {
+    if (!reviewMessages.length && !adminMessages.length && !reviewAdminMessages.length) {
         ownerReviewMessagesEl.style.display = "none";
         ownerReviewMessagesEl.innerHTML = "";
         return;
     }
+    const summaryLabel = adminMessages.length || reviewAdminMessages.length ? "Message" : "Review";
 
     ownerReviewMessagesEl.style.display = "block";
     ownerReviewMessagesEl.innerHTML = `
-        <details class="account-review__details">
-            <summary>Review${reviewMessages.length > 1 ? ` (${reviewMessages.length})` : ""}</summary>
-            <p>Please read the exact review message sent by the admin.</p>
+        <details class="account-review__details" open>
+            <summary>${summaryLabel}</summary>
+            <p>Please read the exact messages and positive feedback received for your account.</p>
+            ${adminMessages.map((action) => `
+                <div class="account-review__item">
+                    <span>Message Statement From ${escapeHtml(action.admin_name || "Admin")}</span>
+                    <strong>${escapeHtml(action.notes)}</strong>
+                </div>
+            `).join("")}
             ${reviewMessages.map((report) => `
                 <div class="account-review__item">
-                    <span>Review Message</span>
+                    <span>Positive Review From ${escapeHtml(report.reporter_name || "Customer")} ${report.rating ? `(${Number(report.rating)}/5)` : ""}</span>
+                    <strong>${escapeHtml(report.message)}</strong>
+                </div>
+            `).join("")}
+            ${reviewAdminMessages.map((report) => `
+                <div class="account-review__item">
+                    <span>Message Statement From Admin</span>
                     <strong>${escapeHtml(report.admin_notes)}</strong>
                 </div>
             `).join("")}
@@ -377,7 +401,7 @@ async function initOwnerOrdersPage() {
         afterLogin: "owner-orders.html"
     });
     if (!session?.user) return;
-    renderOwnerReviewMessages(session.moderation_reports || []);
+    renderOwnerReviewMessages(session.moderation_reports || [], session.admin_actions || [], session.user);
     loadOrders();
 }
 

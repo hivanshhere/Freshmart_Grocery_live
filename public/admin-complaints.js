@@ -93,11 +93,12 @@ function renderReports(reports) {
                 <p>${escapeHtml(report.message)}</p>
             </div>
 
-            <input class="admin-card__note" id="reportNote-${escapeHtml(report.id)}" placeholder="Admin note for this action">
+            <input class="admin-card__note" id="reportNote-${escapeHtml(report.id)}" placeholder="Exact warning or message to send">
 
             <div class="admin-card__actions">
                 ${isReview ? `<button type="button" class="orders-btn orders-btn--primary" onclick="sendReviewMessage('${escapeHtml(report.id)}')">Send Review Message</button>` : ""}
                 <button type="button" class="orders-btn orders-btn--primary" onclick="takeReportAction('${escapeHtml(report.id)}', '${escapeHtml(report.target_user_id)}', 'warning')">Issue Warning</button>
+                <button type="button" class="orders-btn orders-btn--ghost" onclick="takeReportAction('${escapeHtml(report.id)}', '${escapeHtml(report.target_user_id)}', 'message')">Send Message</button>
                 <button type="button" class="orders-btn orders-btn--danger" onclick="takeReportAction('${escapeHtml(report.id)}', '${escapeHtml(report.target_user_id)}', 'ban')">Ban User</button>
                 <button type="button" class="orders-btn orders-btn--danger" onclick="takeReportAction('${escapeHtml(report.id)}', '${escapeHtml(report.target_user_id)}', 'remove')">Remove User</button>
                 <button type="button" class="orders-btn orders-btn--ghost" onclick="dismissReport('${escapeHtml(report.id)}')">Dismiss Report</button>
@@ -145,6 +146,10 @@ async function loadComplaints() {
 
 async function takeReportAction(reportId, targetUserId, action) {
     const note = String(document.getElementById(`reportNote-${reportId}`)?.value || "").trim();
+    if ((action === "warning" || action === "message") && !note) {
+        showFeedback("Enter the exact statement to send to this user.", "error");
+        return;
+    }
 
     try {
         const data = await fetchJson(`${API_BASE}/admin/users/${targetUserId}/action`, {

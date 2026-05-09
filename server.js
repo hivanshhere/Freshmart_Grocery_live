@@ -607,23 +607,26 @@ app.get("/auth/me", requireAuth, asyncHandler(async (req, res) => {
     ]
   })
     .sort({ updatedAt: -1, createdAt: -1 })
-    .limit(10);
-  const warningActions = await ModerationAction.find({
+    .limit(50);
+  const adminActions = await ModerationAction.find({
     target_user_id: req.auth.user._id,
-    action_type: "warning"
+    action_type: { $in: ["warning", "message"] }
   }).sort({ createdAt: -1 });
   const reporterIds = [...new Set(reports.map((report) => String(report.reporter_id || "")).filter(Boolean))];
+  const targetIds = [...new Set(reports.map((report) => String(report.target_user_id || "")).filter(Boolean))];
   const storeIds = [...new Set(reports.map((report) => String(report.store_id || "")).filter(Boolean))];
   const adminIds = [...new Set([
     ...reports.map((report) => String(report.resolved_by || "")),
-    ...warningActions.map((action) => String(action.admin_id || ""))
+    ...adminActions.map((action) => String(action.admin_id || ""))
   ].filter(Boolean))];
-  const [reporters, stores, admins] = await Promise.all([
+  const [reporters, targets, stores, admins] = await Promise.all([
     User.find({ _id: { $in: reporterIds } }),
+    User.find({ _id: { $in: targetIds } }),
     Store.find({ _id: { $in: storeIds } }),
     User.find({ _id: { $in: adminIds } })
   ]);
   const reporterMap = new Map(reporters.map((user) => [String(user._id), user]));
+  const targetMap = new Map(targets.map((user) => [String(user._id), user]));
   const storeMap = new Map(stores.map((store) => [String(store._id), store]));
   const adminMap = new Map(admins.map((user) => [String(user._id), user]));
 
@@ -632,6 +635,7 @@ app.get("/auth/me", requireAuth, asyncHandler(async (req, res) => {
     moderation_reports: reports.map((report) => ({
       id: String(report._id),
       order_id: String(report.order_id || ""),
+      target_user_id: String(report.target_user_id || ""),
       report_type: report.report_type,
       message: report.message,
       status: report.status,
@@ -642,16 +646,27 @@ app.get("/auth/me", requireAuth, asyncHandler(async (req, res) => {
       rating: report.rating || null,
       reporter_name: reporterMap.get(String(report.reporter_id || ""))?.name || "",
       reporter_role: reporterMap.get(String(report.reporter_id || ""))?.role || report.reporter_role || "",
+      target_name: targetMap.get(String(report.target_user_id || ""))?.name || "",
+      target_role: targetMap.get(String(report.target_user_id || ""))?.role || report.target_role || "",
       store_name: storeMap.get(String(report.store_id || ""))?.store_name || "",
       resolved_by_name: adminMap.get(String(report.resolved_by || ""))?.name || ""
     })),
-    warning_actions: warningActions.map((action) => ({
+    admin_actions: adminActions.map((action) => ({
       id: String(action._id),
       action_type: action.action_type,
       notes: action.notes || "",
       created_at: action.createdAt,
       admin_name: adminMap.get(String(action.admin_id || ""))?.name || "Admin"
-    }))
+    })),
+    warning_actions: adminActions
+      .filter((action) => String(action.action_type || "").toLowerCase() === "warning")
+      .map((action) => ({
+        id: String(action._id),
+        action_type: action.action_type,
+        notes: action.notes || "",
+        created_at: action.createdAt,
+        admin_name: adminMap.get(String(action.admin_id || ""))?.name || "Admin"
+      }))
   });
 }));
 
@@ -1431,8 +1446,11 @@ app.post("/admin/users/:userId/action", requireAuth, requireAdmin, asyncHandler(
   const notes = String(req.body?.notes || "").trim();
   const reportId = req.body?.report_id || null;
 
-  if (!["warning", "ban", "remove", "activate"].includes(action)) {
+  if (!["warning", "message", "ban", "remove", "activate"].includes(action)) {
     return res.status(400).json({ message: "Invalid admin action" });
+  }
+  if (["warning", "message"].includes(action) && !notes) {
+    return res.status(400).json({ message: "Enter the exact statement to send to this user" });
   }
 
   const targetUser = await User.findById(targetUserId);
@@ -1441,6 +1459,8 @@ app.post("/admin/users/:userId/action", requireAuth, requireAdmin, asyncHandler(
 
   if (action === "warning") {
     await issueWarning(req.auth.user._id, targetUserId, reportId, notes || "Warning issued by admin");
+  } else if (action === "message") {
+    await createModerationAction(req.auth.user._id, targetUserId, reportId, "message", notes);
   } else if (action === "ban") {
     await removeUserAccess(req.auth.user._id, targetUserId, reportId, notes || "Banned by admin", "banned");
   } else if (action === "remove") {

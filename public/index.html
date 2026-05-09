@@ -20,6 +20,8 @@
     </header>
 
     <main class="home-main">
+        <section id="customerAdminMessagePanel" class="admin-message-panel" style="display:none;"></section>
+
         <section class="hero">
             <h2>Order Groceries From Your Local Store</h2>
             <p>Fresh products delivered to your doorstep or ready for pickup.</p>
@@ -50,5 +52,68 @@
 
     <script src="auth.js"></script>
     <script src="nav.js"></script>
+    <script>
+        function escapeAdminMessageHtml(value) {
+            return String(value ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function adminMessageText(action) {
+            return String(action?.notes || action?.admin_notes || action?.message || "").trim();
+        }
+
+        function showCustomerAdminMessages(session) {
+            const panel = document.getElementById("customerAdminMessagePanel");
+            if (!panel || session?.user?.role !== "customer") return;
+
+            const directMessages = Array.isArray(session.admin_actions)
+                ? session.admin_actions.filter((action) => String(action.action_type || "").toLowerCase() === "message" && adminMessageText(action))
+                : [];
+            const reviewMessages = Array.isArray(session.moderation_reports)
+                ? session.moderation_reports.filter((report) => {
+                    const isForCustomer = String(report.target_user_id || "") === String(session.user.id || "");
+                    return isForCustomer && String(report.resolution_action || "").toLowerCase() === "message" && String(report.admin_notes || "").trim();
+                })
+                : [];
+
+            if (!directMessages.length && !reviewMessages.length) {
+                panel.style.display = "none";
+                panel.innerHTML = "";
+                return;
+            }
+
+            panel.style.display = "block";
+            panel.innerHTML = `
+                <details class="admin-message-panel__details" open>
+                    <summary>Message</summary>
+                    <p>This message was sent by the admin. Please read the exact statement below.</p>
+                    ${directMessages.map((action) => `
+                        <div class="admin-message-panel__item">
+                            <h4>Message From Admin</h4>
+                            <div class="admin-message-panel__meta">Sent by ${escapeAdminMessageHtml(action.admin_name || "Admin")}</div>
+                            <span>Message Statement</span>
+                            <strong>${escapeAdminMessageHtml(adminMessageText(action))}</strong>
+                        </div>
+                    `).join("")}
+                    ${reviewMessages.map((report) => `
+                        <div class="admin-message-panel__item">
+                            <h4>Message From Admin</h4>
+                            <span>Message Statement</span>
+                            <strong>${escapeAdminMessageHtml(report.admin_notes)}</strong>
+                        </div>
+                    `).join("")}
+                </details>
+            `;
+        }
+
+        (async function loadCustomerAdminMessages() {
+            const session = await window.AppAuth?.validateCurrentSession?.({ redirectOnFail: false });
+            if (session?.user?.role === "customer") showCustomerAdminMessages(session);
+        })();
+    </script>
 </body>
 </html>

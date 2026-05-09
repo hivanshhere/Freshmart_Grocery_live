@@ -51,42 +51,44 @@ margin-bottom:24px;
 
 .account-review{
 margin:0 0 22px;
-padding:20px 22px;
-border-radius:20px;
-border:1px solid rgba(31,122,69,0.20);
-background:linear-gradient(135deg, #e8f8ee 0%, #f5fff8 100%);
-box-shadow:0 16px 34px rgba(31,122,69,0.12);
-color:#17623a;
+padding:24px 26px;
+border-radius:24px;
+border:1px solid rgba(185,73,59,0.22);
+background:#fff1f1;
+box-shadow:0 16px 34px rgba(185,73,59,0.08);
+color:#8c2419;
 }
 
 .account-review h3{
 margin:0 0 8px;
-font-size:22px;
-color:#17623a;
+font-size:28px;
+color:#8c2419;
 }
 
 .account-review__details summary{
 cursor:pointer;
-font-size:22px;
+font-size:28px;
+line-height:1.2;
 font-weight:800;
-color:#17623a;
+color:#8c2419;
 }
 
 .account-review__details summary::marker{
-color:#17623a;
+color:#8c2419;
 }
 
 .account-review p{
-margin:0 0 14px;
+margin:12px 0 18px;
 line-height:1.6;
-font-weight:700;
+font-size:19px;
+font-weight:600;
 }
 
 .account-review__item{
-padding:14px 16px;
-border-radius:16px;
-border:1px solid rgba(31,122,69,0.16);
-background:rgba(255,255,255,0.76);
+padding:18px 20px;
+border-radius:18px;
+border:1px solid rgba(185,73,59,0.16);
+background:rgba(255,255,255,0.78);
 }
 
 .account-review__item + .account-review__item{
@@ -95,18 +97,19 @@ margin-top:10px;
 
 .account-review__item span{
 display:block;
-margin-bottom:6px;
-font-size:12px;
+margin-bottom:8px;
+font-size:14px;
 font-weight:800;
 letter-spacing:0.08em;
 text-transform:uppercase;
+color:rgba(140,36,25,0.72);
 }
 
 .account-review__item strong{
 display:block;
-font-size:16px;
+font-size:18px;
 line-height:1.55;
-color:#124a2d;
+color:#8c2419;
 }
 
 .orders-stat{

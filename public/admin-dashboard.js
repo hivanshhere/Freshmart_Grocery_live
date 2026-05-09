@@ -92,10 +92,11 @@ function userCard(user, options = {}) {
                 <div><span>Restriction Note</span><strong>${escapeHtml(user.ban_reason || "None")}</strong></div>
             </div>
 
-            <input class="admin-card__note" id="userNote-${escapeHtml(user.id)}" placeholder="Optional admin note">
+            <input class="admin-card__note" id="userNote-${escapeHtml(user.id)}" placeholder="Exact warning or message to send">
 
             <div class="admin-card__actions">
                 <button type="button" class="orders-btn orders-btn--primary" onclick="takeUserAction('${escapeHtml(user.id)}', 'warning')">Warn</button>
+                <button type="button" class="orders-btn orders-btn--ghost" onclick="takeUserAction('${escapeHtml(user.id)}', 'message')">Message</button>
                 <button type="button" class="orders-btn orders-btn--danger" onclick="takeUserAction('${escapeHtml(user.id)}', 'ban')">Ban</button>
                 <button type="button" class="orders-btn orders-btn--danger" onclick="takeUserAction('${escapeHtml(user.id)}', 'remove')">Remove</button>
                 <button type="button" class="orders-btn orders-btn--ghost" onclick="takeUserAction('${escapeHtml(user.id)}', 'activate')">Activate</button>
@@ -140,6 +141,10 @@ async function loadDashboard() {
 
 async function takeUserAction(userId, action) {
     const note = String(document.getElementById(`userNote-${userId}`)?.value || "").trim();
+    if ((action === "warning" || action === "message") && !note) {
+        showFeedback("Enter the exact statement to send to this user.", "error");
+        return;
+    }
 
     try {
         const data = await fetchJson(`${API_BASE}/admin/users/${userId}/action`, {

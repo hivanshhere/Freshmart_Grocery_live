@@ -51,8 +51,8 @@
         expectedRole: "customer",
         afterLogin: "stores.html"
     });
-    showCustomerWarning(session?.user, session?.warning_actions || []);
-    showCustomerReviewMessages(session?.moderation_reports || []);
+    showCustomerWarning(session?.user, session?.admin_actions || session?.warning_actions || []);
+    showCustomerReviewMessages(session?.user, session?.moderation_reports || [], session?.admin_actions || []);
 })();
 
 function escapeWarningHtml(value) {
@@ -76,7 +76,7 @@ function showCustomerWarning(profile, warningActions) {
     const warningCount = Number(profile?.warning_count ?? localStorage.getItem("warningCount") ?? 0);
     const banReason = String(profile?.ban_reason || localStorage.getItem("banReason") || "").trim();
     const warnings = Array.isArray(warningActions)
-        ? warningActions.filter((warning) => getWarningText(warning))
+        ? warningActions.filter((warning) => String(warning.action_type || "warning").toLowerCase() === "warning" && getWarningText(warning))
         : [];
 
     if (status !== "warned" && warningCount <= 0 && !banReason && warnings.length === 0) {
@@ -101,7 +101,7 @@ function showCustomerWarning(profile, warningActions) {
 
     warningEl.style.display = "block";
     warningEl.innerHTML = `
-        <details class="store-account-warning__details">
+        <details class="store-account-warning__details" open>
             <summary>Warning${warningCount > 1 ? ` (${warningCount})` : ""}</summary>
             <p>This is a warning from the admin. Please read the exact message below.</p>
             ${warningItems}
@@ -109,32 +109,56 @@ function showCustomerWarning(profile, warningActions) {
     `;
 }
 
-function showCustomerReviewMessages(moderationReports) {
+function showCustomerReviewMessages(profile, moderationReports, adminActions = []) {
     const reviewEl = document.getElementById("customerReviewMessages");
     if (!reviewEl) return;
 
+    const userId = String(profile?.id || localStorage.getItem("userId") || "");
     const reviewMessages = Array.isArray(moderationReports)
         ? moderationReports.filter((report) => {
+            const isForMe = String(report.target_user_id || "") === userId;
             const isReview = String(report.report_type || "").toLowerCase() === "review";
-            const isMessage = String(report.resolution_action || "").toLowerCase() === "message";
-            return isReview && isMessage && String(report.admin_notes || "").trim();
+            const rating = Number(report.rating) || 0;
+            return isForMe && isReview && rating >= 4 && String(report.message || "").trim();
+        })
+        : [];
+    const adminMessages = Array.isArray(adminActions)
+        ? adminActions.filter((action) => String(action.action_type || "").toLowerCase() === "message" && getWarningText(action))
+        : [];
+    const reviewAdminMessages = Array.isArray(moderationReports)
+        ? moderationReports.filter((report) => {
+            const isForMe = String(report.target_user_id || "") === userId;
+            return isForMe && String(report.resolution_action || "").toLowerCase() === "message" && String(report.admin_notes || "").trim();
         })
         : [];
 
-    if (!reviewMessages.length) {
+    if (!reviewMessages.length && !adminMessages.length && !reviewAdminMessages.length) {
         reviewEl.style.display = "none";
         reviewEl.innerHTML = "";
         return;
     }
+    const summaryLabel = adminMessages.length || reviewAdminMessages.length ? "Message" : "Review";
 
     reviewEl.style.display = "block";
     reviewEl.innerHTML = `
-        <details class="store-account-review__details">
-            <summary>Review${reviewMessages.length > 1 ? ` (${reviewMessages.length})` : ""}</summary>
-            <p>Please read the exact review message sent by the admin.</p>
+        <details class="store-account-review__details" open>
+            <summary>${summaryLabel}</summary>
+            <p>Please read the exact messages and positive feedback received for your account.</p>
+            ${adminMessages.map((action) => `
+                <div class="store-account-review__item">
+                    <span>Message Statement From Admin</span>
+                    <strong>${escapeWarningHtml(getWarningText(action))}</strong>
+                </div>
+            `).join("")}
             ${reviewMessages.map((report) => `
                 <div class="store-account-review__item">
-                    <span>Review Message</span>
+                    <span>Positive Review From ${escapeWarningHtml(report.reporter_name || "Store Owner")} ${report.rating ? `(${Number(report.rating)}/5)` : ""}</span>
+                    <strong>${escapeWarningHtml(report.message)}</strong>
+                </div>
+            `).join("")}
+            ${reviewAdminMessages.map((report) => `
+                <div class="store-account-review__item">
+                    <span>Message Statement From Admin</span>
                     <strong>${escapeWarningHtml(report.admin_notes)}</strong>
                 </div>
             `).join("")}
