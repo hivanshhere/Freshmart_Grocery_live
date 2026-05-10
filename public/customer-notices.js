@@ -152,13 +152,14 @@
             : noticeItemsHtml;
 
         if (hasWarning) {
+            const totalWarningSummaryItems = Math.max(totalWarningItems, warningReports.length);
             container.style.display = "block";
             if (prefix === "owner-notice") {
                 container.className = "owner-notice owner-notice--error";
             }
             container.innerHTML = `
-                <details class="${prefix}__details" open>
-                    <summary>Warning${totalWarningItems > 1 ? ` (${totalWarningItems})` : ""}</summary>
+                <details class="${prefix}__details">
+                    <summary>Warnings (${totalWarningSummaryItems})</summary>
                     ${warningCount > 0 ? `<p>Your customer account has received ${warningCount} warning${warningCount === 1 ? "" : "s"} from the admin.</p>` : ""}
                     ${noticeListHtml}
                 </details>
@@ -201,9 +202,10 @@
             : reviewItemsHtml;
 
         reviewContainer.style.display = "block";
+        const totalReviewItems = messageActions.length + positiveReviews.length + adminReviewMessages.length;
         reviewContainer.innerHTML = `
-            <details class="${reviewPrefix}__details" open>
-                <summary>${positiveReviews.length ? "Review" : "Message"}</summary>
+            <details class="${reviewPrefix}__details">
+                <summary>${positiveReviews.length ? "Reviews" : "Messages"} (${totalReviewItems})</summary>
                 <p>Please read the reviews and admin messages for your customer account.</p>
                 ${reviewListHtml}
             </details>

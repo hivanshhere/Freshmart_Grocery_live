@@ -103,12 +103,13 @@ function renderOwnerReviewMessages(reports = [], adminActions = [], profile = {}
         ownerReviewMessagesEl.innerHTML = "";
         return;
     }
-    const summaryLabel = adminMessages.length || reviewAdminMessages.length ? "Message" : "Review";
+    const summaryLabel = adminMessages.length || reviewAdminMessages.length ? "Messages" : "Reviews";
+    const totalReviewItems = adminMessages.length + reviewMessages.length + reviewAdminMessages.length;
 
     ownerReviewMessagesEl.style.display = "block";
     ownerReviewMessagesEl.innerHTML = `
-        <details class="owner-review-notice__details" open>
-            <summary>${summaryLabel}</summary>
+        <details class="owner-review-notice__details">
+            <summary>${summaryLabel} (${totalReviewItems})</summary>
             <p>Please read the exact messages and positive feedback received for your account.</p>
             <div class="owner-review-notice__list">
             ${adminMessages.map((action) => `

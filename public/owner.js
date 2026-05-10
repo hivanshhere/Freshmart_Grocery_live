@@ -157,11 +157,12 @@ function showOwnerNotice(profile, moderationReports = [], adminActions = []) {
         : "";
 
     if (ownerAccountNoticeEl && hasWarningUpdates) {
+        const totalWarningSummaryItems = Math.max(totalWarningItems, visibleWarningReports.length);
         ownerAccountNoticeEl.style.display = "block";
         ownerAccountNoticeEl.className = "owner-notice owner-notice--error";
         ownerAccountNoticeEl.innerHTML = `
-            <details class="owner-notice__details" open>
-                <summary>Warning${totalWarningItems > 1 ? ` (${totalWarningItems})` : ""}</summary>
+            <details class="owner-notice__details">
+                <summary>Warnings (${totalWarningSummaryItems})</summary>
                 ${warningCount > 0 ? `<p>Your store owner account has received ${warningCount} warning${warningCount === 1 ? "" : "s"} from the admin.</p>` : ""}
                 ${(warningCount > 0 && !warningItems.length) ? `<p><strong>Warning:</strong> ${escapeHtml(banReason || "Please review your recent activity and follow the platform rules to avoid stronger action.")}</p>` : ""}
                 ${warningsHtml}
@@ -207,10 +208,11 @@ function showOwnerNotice(profile, moderationReports = [], adminActions = []) {
         : "";
 
     if (ownerReviewNoticeEl && hasReviewUpdates) {
+        const totalReviewItems = visibleMessages.length + positiveReviews.length + adminReviewMessages.length;
         ownerReviewNoticeEl.style.display = "block";
         ownerReviewNoticeEl.innerHTML = `
-            <details class="owner-review-notice__details" open>
-                <summary>${positiveReviews.length ? "Review" : "Message"}</summary>
+            <details class="owner-review-notice__details">
+                <summary>${positiveReviews.length ? "Reviews" : "Messages"} (${totalReviewItems})</summary>
                 <p>Please read the reviews and admin messages for your store owner account.</p>
                 <div class="owner-review-notice__list">
                     ${messagesHtml}

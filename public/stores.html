@@ -105,7 +105,7 @@ function showCustomerWarning(profile, warningActions) {
 
     warningEl.style.display = "block";
     warningEl.innerHTML = `
-        <details class="store-account-warning__details" open>
+        <details class="store-account-warning__details">
             <summary>Warning${warningCount > 1 ? ` (${warningCount})` : ""}</summary>
             <p>This is a warning from the admin. Please read the exact message below.</p>
             ${warningItems}
@@ -145,7 +145,7 @@ function showCustomerReviewMessages(profile, moderationReports, adminActions = [
 
     reviewEl.style.display = "block";
     reviewEl.innerHTML = `
-        <details class="store-account-review__details" open>
+        <details class="store-account-review__details">
             <summary>${summaryLabel}</summary>
             <p>Please read the exact messages and positive feedback received for your account.</p>
             ${adminMessages.map((action) => `

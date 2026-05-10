@@ -105,7 +105,7 @@ function renderCustomerAccountUpdates(session) {
 
     customerAccountUpdatesEl.style.display = "block";
     customerAccountUpdatesEl.innerHTML = `
-        <details class="account-review__details" open>
+        <details class="account-review__details">
             <summary>${summaryLabel}</summary>
             ${actionHtml}
             ${fallbackWarningHtml}

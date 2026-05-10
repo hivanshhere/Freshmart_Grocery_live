@@ -205,7 +205,7 @@ function renderCustomerAccountUpdates(session) {
 
     customerAccountUpdatesEl.style.display = "block";
     customerAccountUpdatesEl.innerHTML = `
-        <details class="account-review__details" open>
+        <details class="account-review__details">
             <summary>${summaryLabel}${totalWarningItems > 1 ? ` (${totalWarningItems})` : ""}</summary>
             ${warningCount > 0 ? `<p>Your customer account has received ${warningCount} warning${warningCount === 1 ? "" : "s"} from the admin.</p>` : ""}
             ${warningHtml}
