@@ -12,6 +12,77 @@
         return String(item?.notes || item?.admin_notes || item?.message || "").trim();
     }
 
+    function readStorageKey(userId, bucket) {
+        return `freshMartRead:${bucket}:${userId || "unknown"}`;
+    }
+
+    function getReadIds(userId, bucket) {
+        try {
+            const raw = localStorage.getItem(readStorageKey(userId, bucket));
+            const ids = JSON.parse(raw || "[]");
+            return new Set(Array.isArray(ids) ? ids.map(String) : []);
+        } catch {
+            return new Set();
+        }
+    }
+
+    function saveReadIds(userId, bucket, ids) {
+        try {
+            localStorage.setItem(readStorageKey(userId, bucket), JSON.stringify([...ids]));
+        } catch {
+        }
+    }
+
+    function markReadOnOpen(container, userId, bucket, ids) {
+        const uniqueIds = [...new Set(ids.filter(Boolean).map(String))];
+        if (!container || !uniqueIds.length) return;
+        const details = container.querySelector("details");
+        if (!details) return;
+        details.addEventListener("toggle", () => {
+            if (!details.open) return;
+            const readIds = getReadIds(userId, bucket);
+            uniqueIds.forEach((id) => readIds.add(id));
+            saveReadIds(userId, bucket, readIds);
+            markReadOnServer(uniqueIds);
+        }, { once: true });
+    }
+
+    function markReadOnServer(ids) {
+        const extractId = (value) => String(value || "").split(":").slice(1).join(":");
+        const isObjectId = (value) => /^[a-f\d]{24}$/i.test(value);
+        const action_ids = ids
+            .filter((id) => id.includes("-action:"))
+            .map(extractId)
+            .filter(isObjectId);
+        const report_ids = ids
+            .filter((id) => id.includes("-report:"))
+            .map(extractId)
+            .filter(isObjectId);
+        if (!action_ids.length && !report_ids.length) return;
+        if (typeof fetch !== "function") return;
+
+        const apiBase = window.AppAuth?.API_BASE || (window.location.origin && /^https?:/i.test(window.location.origin)
+            ? window.location.origin
+            : "http://localhost:3000");
+        const token = window.AppAuth?.getToken ? window.AppAuth.getToken() : (localStorage.getItem("authToken") || "");
+        fetch(`${apiBase}/notices/read`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({ action_ids, report_ids })
+        }).catch(() => {});
+    }
+
+    function actionReadId(action, type) {
+        return `${type}-action:${String(action?.id || action?._id || action?.created_at || statement(action))}`;
+    }
+
+    function reportReadId(report, type) {
+        return `${type}-report:${String(report?.id || report?._id || report?.updated_at || report?.created_at || statement(report))}`;
+    }
+
     function actionLabel(action) {
         const normalized = String(action || "").toLowerCase();
         if (normalized === "warning") return "Warning Issued";
@@ -71,6 +142,8 @@
         const warningCount = Number(profile.warning_count ?? localStorage.getItem("warningCount") ?? 0);
         const banReason = String(profile.ban_reason || localStorage.getItem("banReason") || "").trim();
         const status = String(profile.account_status || localStorage.getItem("accountStatus") || "active").toLowerCase();
+        const readWarningIds = getReadIds(userId, "customer-warnings");
+        const readReviewIds = getReadIds(userId, "customer-reviews");
 
         const warningActions = actions
             .filter((action) => String(action.action_type || "").toLowerCase() === "warning" && statement(action))
@@ -83,6 +156,10 @@
             const reportStatus = String(report.status || "").toLowerCase();
             return isForMe && reportAction === "warning" && reportStatus === "resolved";
         });
+        const unreadWarningActions = warningActions.filter((action) => !action.read_by_current_user && !readWarningIds.has(actionReadId(action, "warning")));
+        const unreadWarningReports = warningReports.filter((report) => !report.read_by_current_user && !readWarningIds.has(reportReadId(report, "warning")));
+        const fallbackWarningId = `warning-fallback:${warningCount}:${banReason || status}`;
+        const hasFallbackWarning = warningActions.length === 0 && warningReports.length === 0 && (status === "warned" || warningCount > 0 || Boolean(banReason)) && !readWarningIds.has(fallbackWarningId);
         const positiveReviews = reports.filter((report) => {
             const isForMe = String(report.target_user_id || "") === userId;
             const isReview = String(report.report_type || "").toLowerCase() === "review";
@@ -93,9 +170,14 @@
             const isForMe = String(report.target_user_id || "") === userId;
             return isForMe && String(report.resolution_action || "").toLowerCase() === "message" && String(report.admin_notes || "").trim();
         });
+        const unreadMessageActions = messageActions.filter((action) => !action.read_by_current_user && !readReviewIds.has(actionReadId(action, "message")));
+        const unreadPositiveReviews = positiveReviews.filter((report) => !report.read_by_current_user && !readReviewIds.has(reportReadId(report, "review")));
+        const unreadAdminReviewMessages = adminReviewMessages.filter((report) => !report.read_by_current_user && !readReviewIds.has(reportReadId(report, "review-message")));
 
-        const hasWarning = status === "warned" || warningCount > 0 || Boolean(banReason) || warningActions.length > 0 || warningReports.length > 0;
+        const hasWarning = warningActions.length > 0 || warningReports.length > 0 || hasFallbackWarning;
         const hasReviewUpdates = messageActions.length > 0 || positiveReviews.length > 0 || adminReviewMessages.length > 0;
+        const unreadWarningTotal = unreadWarningActions.length + unreadWarningReports.length + (hasFallbackWarning ? 1 : 0);
+        const unreadReviewTotal = unreadMessageActions.length + unreadPositiveReviews.length + unreadAdminReviewMessages.length;
 
         if (!hasWarning) {
             container.style.display = "none";
@@ -106,7 +188,7 @@
         }
 
         const prefix = prefixFor(container);
-        const totalWarningItems = Math.max(warningCount, warningActions.length);
+        const totalWarningItems = warningActions.length + warningReports.length + (hasFallbackWarning ? 1 : 0);
         const warningHtml = warningActions.map((action, index) => itemHtml(
             prefix,
             `Warning ${index + 1}${totalWarningItems > 1 ? ` of ${totalWarningItems}` : ""} From Admin`,
@@ -114,7 +196,7 @@
             "Warning Message",
             statement(action)
         )).join("");
-        const fallbackWarningHtml = !warningActions.length && hasWarning
+        const fallbackWarningHtml = hasFallbackWarning
             ? itemHtml(prefix, "Warning From Admin", "", "Warning Message", banReason || "Please review your recent activity and follow the platform rules to avoid stronger action.")
             : "";
         const reportHtml = warningReports.map((report) => {
@@ -152,18 +234,22 @@
             : noticeItemsHtml;
 
         if (hasWarning) {
-            const totalWarningSummaryItems = Math.max(totalWarningItems, warningReports.length);
             container.style.display = "block";
             if (prefix === "owner-notice") {
                 container.className = "owner-notice owner-notice--error";
             }
             container.innerHTML = `
                 <details class="${prefix}__details">
-                    <summary>Warnings (${totalWarningSummaryItems})</summary>
-                    ${warningCount > 0 ? `<p>Your customer account has received ${warningCount} warning${warningCount === 1 ? "" : "s"} from the admin.</p>` : ""}
+                    <summary>Warnings${unreadWarningTotal > 0 ? ` (${unreadWarningTotal})` : ""}</summary>
+                    ${unreadWarningTotal > 0 ? `<p>You have ${unreadWarningTotal} unread warning${unreadWarningTotal === 1 ? "" : "s"} from the admin.</p>` : ""}
                     ${noticeListHtml}
                 </details>
             `;
+            markReadOnOpen(container, userId, "customer-warnings", [
+                ...unreadWarningActions.map((action) => actionReadId(action, "warning")),
+                ...unreadWarningReports.map((report) => reportReadId(report, "warning")),
+                ...(hasFallbackWarning ? [fallbackWarningId] : [])
+            ]);
         }
 
         if (!reviewContainer) return;
@@ -202,14 +288,18 @@
             : reviewItemsHtml;
 
         reviewContainer.style.display = "block";
-        const totalReviewItems = messageActions.length + positiveReviews.length + adminReviewMessages.length;
         reviewContainer.innerHTML = `
             <details class="${reviewPrefix}__details">
-                <summary>${positiveReviews.length ? "Reviews" : "Messages"} (${totalReviewItems})</summary>
-                <p>Please read the reviews and admin messages for your customer account.</p>
+                <summary>${positiveReviews.length ? "Reviews" : "Messages"}${unreadReviewTotal > 0 ? ` (${unreadReviewTotal})` : ""}</summary>
+                ${unreadReviewTotal > 0 ? `<p>You have ${unreadReviewTotal} unread review/message update${unreadReviewTotal === 1 ? "" : "s"} for your customer account.</p>` : ""}
                 ${reviewListHtml}
             </details>
         `;
+        markReadOnOpen(reviewContainer, userId, "customer-reviews", [
+            ...unreadMessageActions.map((action) => actionReadId(action, "message")),
+            ...unreadPositiveReviews.map((report) => reportReadId(report, "review")),
+            ...unreadAdminReviewMessages.map((report) => reportReadId(report, "review-message"))
+        ]);
     }
 
     window.CustomerNotices = {

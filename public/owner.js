@@ -78,11 +78,80 @@ function formatWarningMessage(warning) {
     return String(warning?.notes || warning?.admin_notes || warning?.message || "").trim();
 }
 
+function ownerReadStorageKey(userId, bucket) {
+    return `freshMartRead:${bucket}:${userId || "unknown"}`;
+}
+
+function getOwnerReadIds(userId, bucket) {
+    try {
+        const raw = localStorage.getItem(ownerReadStorageKey(userId, bucket));
+        const ids = JSON.parse(raw || "[]");
+        return new Set(Array.isArray(ids) ? ids.map(String) : []);
+    } catch {
+        return new Set();
+    }
+}
+
+function saveOwnerReadIds(userId, bucket, ids) {
+    try {
+        localStorage.setItem(ownerReadStorageKey(userId, bucket), JSON.stringify([...ids]));
+    } catch {
+    }
+}
+
+function markOwnerReadOnOpen(container, userId, bucket, ids) {
+    const uniqueIds = [...new Set(ids.filter(Boolean).map(String))];
+    if (!container || !uniqueIds.length) return;
+    const details = container.querySelector("details");
+    if (!details) return;
+    details.addEventListener("toggle", () => {
+        if (!details.open) return;
+        const readIds = getOwnerReadIds(userId, bucket);
+        uniqueIds.forEach((id) => readIds.add(id));
+        saveOwnerReadIds(userId, bucket, readIds);
+        markOwnerReadOnServer(uniqueIds);
+    }, { once: true });
+}
+
+function markOwnerReadOnServer(ids) {
+    const extractId = (value) => String(value || "").split(":").slice(1).join(":");
+    const isObjectId = (value) => /^[a-f\d]{24}$/i.test(value);
+    const action_ids = ids
+        .filter((id) => id.includes("-action:"))
+        .map(extractId)
+        .filter(isObjectId);
+    const report_ids = ids
+        .filter((id) => id.includes("-report:"))
+        .map(extractId)
+        .filter(isObjectId);
+    if (!action_ids.length && !report_ids.length) return;
+    if (typeof fetch !== "function") return;
+
+    fetch(`${API_BASE}/notices/read`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${ownerToken()}`
+        },
+        body: JSON.stringify({ action_ids, report_ids })
+    }).catch(() => {});
+}
+
+function ownerActionReadId(action, type) {
+    return `${type}-action:${String(action?.id || action?._id || action?.created_at || formatWarningMessage(action))}`;
+}
+
+function ownerReportReadId(report, type) {
+    return `${type}-report:${String(report?.id || report?._id || report?.updated_at || report?.created_at || formatWarningMessage(report))}`;
+}
+
 function showOwnerNotice(profile, moderationReports = [], adminActions = []) {
     const status = String(profile?.account_status || localStorage.getItem("accountStatus") || "active").toLowerCase();
     const warningCount = Number(profile?.warning_count ?? localStorage.getItem("warningCount") ?? 0);
     const banReason = String(profile?.ban_reason || localStorage.getItem("banReason") || "").trim();
     const userId = String(profile?.id || localStorage.getItem("userId") || "");
+    const readWarningIds = getOwnerReadIds(userId, "owner-warnings");
+    const readReviewIds = getOwnerReadIds(userId, "owner-reviews");
     const visibleWarningReports = Array.isArray(moderationReports)
         ? moderationReports.filter((report) => {
             const isForMe = String(report.target_user_id || "") === userId;
@@ -97,7 +166,11 @@ function showOwnerNotice(profile, moderationReports = [], adminActions = []) {
     const warningItems = visibleWarnings
         .slice()
         .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
-    const totalWarningItems = Math.max(warningCount, warningItems.length);
+    const unreadWarningItems = warningItems.filter((warning) => !warning.read_by_current_user && !readWarningIds.has(ownerActionReadId(warning, "warning")));
+    const unreadWarningReports = visibleWarningReports.filter((report) => !report.read_by_current_user && !readWarningIds.has(ownerReportReadId(report, "warning")));
+    const fallbackWarningId = `warning-fallback:${warningCount}:${banReason || status}`;
+    const hasFallbackWarning = warningItems.length === 0 && visibleWarningReports.length === 0 && (status === "warned" || warningCount > 0 || Boolean(banReason)) && !readWarningIds.has(fallbackWarningId);
+    const totalWarningItems = unreadWarningItems.length + unreadWarningReports.length + (hasFallbackWarning ? 1 : 0);
     const visibleMessages = Array.isArray(adminActions)
         ? adminActions.filter((action) => String(action.action_type || "").toLowerCase() === "message" && formatWarningMessage(action))
         : [];
@@ -115,8 +188,13 @@ function showOwnerNotice(profile, moderationReports = [], adminActions = []) {
             return isForMe && String(report.resolution_action || "").toLowerCase() === "message" && String(report.admin_notes || "").trim();
         })
         : [];
-    const hasWarningUpdates = status === "warned" || warningCount > 0 || Boolean(banReason) || visibleWarnings.length > 0 || visibleWarningReports.length > 0;
+    const unreadMessages = visibleMessages.filter((message) => !message.read_by_current_user && !readReviewIds.has(ownerActionReadId(message, "message")));
+    const unreadPositiveReviews = positiveReviews.filter((report) => !report.read_by_current_user && !readReviewIds.has(ownerReportReadId(report, "review")));
+    const unreadAdminReviewMessages = adminReviewMessages.filter((report) => !report.read_by_current_user && !readReviewIds.has(ownerReportReadId(report, "review-message")));
+    const hasWarningUpdates = warningItems.length > 0 || visibleWarningReports.length > 0 || hasFallbackWarning;
     const hasReviewUpdates = visibleMessages.length > 0 || positiveReviews.length > 0 || adminReviewMessages.length > 0;
+    const unreadWarningTotal = totalWarningItems;
+    const unreadReviewTotal = unreadMessages.length + unreadPositiveReviews.length + unreadAdminReviewMessages.length;
 
     if (ownerAccountNoticeEl && !hasWarningUpdates) {
         ownerAccountNoticeEl.style.display = "none";
@@ -124,12 +202,13 @@ function showOwnerNotice(profile, moderationReports = [], adminActions = []) {
         ownerAccountNoticeEl.className = "owner-notice";
     }
 
+    const totalWarningDisplayItems = warningItems.length + visibleWarningReports.length + (hasFallbackWarning ? 1 : 0);
     const warningsHtml = warningItems.length
         ? `
             <div class="owner-notice__list">
                 ${warningItems.map((warning, index) => `
                     <div class="owner-notice__item">
-                        <h4>Warning ${index + 1}${totalWarningItems > 1 ? ` of ${totalWarningItems}` : ""} From Admin</h4>
+                        <h4>Warning ${index + 1}${totalWarningDisplayItems > 1 ? ` of ${totalWarningDisplayItems}` : ""} From Admin</h4>
                         <div class="owner-notice__meta">Sent by ${escapeHtml(warning.admin_name || "Admin")}</div>
                         <span class="owner-notice__label">Warning Message</span>
                         <p>${escapeHtml(formatWarningMessage(warning))}</p>
@@ -157,18 +236,22 @@ function showOwnerNotice(profile, moderationReports = [], adminActions = []) {
         : "";
 
     if (ownerAccountNoticeEl && hasWarningUpdates) {
-        const totalWarningSummaryItems = Math.max(totalWarningItems, visibleWarningReports.length);
         ownerAccountNoticeEl.style.display = "block";
         ownerAccountNoticeEl.className = "owner-notice owner-notice--error";
         ownerAccountNoticeEl.innerHTML = `
             <details class="owner-notice__details">
-                <summary>Warnings (${totalWarningSummaryItems})</summary>
-                ${warningCount > 0 ? `<p>Your store owner account has received ${warningCount} warning${warningCount === 1 ? "" : "s"} from the admin.</p>` : ""}
-                ${(warningCount > 0 && !warningItems.length) ? `<p><strong>Warning:</strong> ${escapeHtml(banReason || "Please review your recent activity and follow the platform rules to avoid stronger action.")}</p>` : ""}
+                <summary>Warnings${unreadWarningTotal > 0 ? ` (${unreadWarningTotal})` : ""}</summary>
+                ${unreadWarningTotal > 0 ? `<p>You have ${unreadWarningTotal} unread warning${unreadWarningTotal === 1 ? "" : "s"} from the admin.</p>` : ""}
+                ${hasFallbackWarning ? `<p><strong>Warning:</strong> ${escapeHtml(banReason || "Please review your recent activity and follow the platform rules to avoid stronger action.")}</p>` : ""}
                 ${warningsHtml}
                 ${reportsHtml}
             </details>
         `;
+        markOwnerReadOnOpen(ownerAccountNoticeEl, userId, "owner-warnings", [
+            ...unreadWarningItems.map((warning) => ownerActionReadId(warning, "warning")),
+            ...unreadWarningReports.map((report) => ownerReportReadId(report, "warning")),
+            ...(hasFallbackWarning ? [fallbackWarningId] : [])
+        ]);
     }
 
     if (ownerReviewNoticeEl && !hasReviewUpdates) {
@@ -208,18 +291,22 @@ function showOwnerNotice(profile, moderationReports = [], adminActions = []) {
         : "";
 
     if (ownerReviewNoticeEl && hasReviewUpdates) {
-        const totalReviewItems = visibleMessages.length + positiveReviews.length + adminReviewMessages.length;
         ownerReviewNoticeEl.style.display = "block";
         ownerReviewNoticeEl.innerHTML = `
             <details class="owner-review-notice__details">
-                <summary>${positiveReviews.length ? "Reviews" : "Messages"} (${totalReviewItems})</summary>
-                <p>Please read the reviews and admin messages for your store owner account.</p>
+                <summary>${positiveReviews.length ? "Reviews" : "Messages"}${unreadReviewTotal > 0 ? ` (${unreadReviewTotal})` : ""}</summary>
+                ${unreadReviewTotal > 0 ? `<p>You have ${unreadReviewTotal} unread review/message update${unreadReviewTotal === 1 ? "" : "s"} for your store owner account.</p>` : ""}
                 <div class="owner-review-notice__list">
                     ${messagesHtml}
                     ${reviewsHtml}
                 </div>
             </details>
         `;
+        markOwnerReadOnOpen(ownerReviewNoticeEl, userId, "owner-reviews", [
+            ...unreadMessages.map((message) => ownerActionReadId(message, "message")),
+            ...unreadPositiveReviews.map((report) => ownerReportReadId(report, "review")),
+            ...unreadAdminReviewMessages.map((report) => ownerReportReadId(report, "review-message"))
+        ]);
     }
 }
 

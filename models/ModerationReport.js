@@ -13,7 +13,8 @@ const moderationReportSchema = new mongoose.Schema({
   status: { type: String, default: "pending" },
   admin_notes: { type: String, default: "" },
   resolved_by: mongoose.Schema.Types.ObjectId,
-  resolution_action: { type: String, default: "" }
+  resolution_action: { type: String, default: "" },
+  read_by: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }]
 }, {
   timestamps: true
 });

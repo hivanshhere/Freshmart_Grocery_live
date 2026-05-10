@@ -649,14 +649,20 @@ app.get("/auth/me", requireAuth, asyncHandler(async (req, res) => {
       target_name: targetMap.get(String(report.target_user_id || ""))?.name || "",
       target_role: targetMap.get(String(report.target_user_id || ""))?.role || report.target_role || "",
       store_name: storeMap.get(String(report.store_id || ""))?.store_name || "",
-      resolved_by_name: adminMap.get(String(report.resolved_by || ""))?.name || ""
+      resolved_by_name: adminMap.get(String(report.resolved_by || ""))?.name || "",
+      read_by_current_user: Array.isArray(report.read_by)
+        ? report.read_by.some((userId) => String(userId) === String(req.auth.user._id))
+        : false
     })),
     admin_actions: adminActions.map((action) => ({
       id: String(action._id),
       action_type: action.action_type,
       notes: action.notes || "",
       created_at: action.createdAt,
-      admin_name: adminMap.get(String(action.admin_id || ""))?.name || "Admin"
+      admin_name: adminMap.get(String(action.admin_id || ""))?.name || "Admin",
+      read_by_current_user: Array.isArray(action.read_by)
+        ? action.read_by.some((userId) => String(userId) === String(req.auth.user._id))
+        : false
     })),
     warning_actions: adminActions
       .filter((action) => String(action.action_type || "").toLowerCase() === "warning")
@@ -665,9 +671,34 @@ app.get("/auth/me", requireAuth, asyncHandler(async (req, res) => {
         action_type: action.action_type,
         notes: action.notes || "",
         created_at: action.createdAt,
-        admin_name: adminMap.get(String(action.admin_id || ""))?.name || "Admin"
+        admin_name: adminMap.get(String(action.admin_id || ""))?.name || "Admin",
+        read_by_current_user: Array.isArray(action.read_by)
+          ? action.read_by.some((userId) => String(userId) === String(req.auth.user._id))
+          : false
       }))
   });
+}));
+
+app.post("/notices/read", requireAuth, asyncHandler(async (req, res) => {
+  const actionIds = Array.isArray(req.body?.action_ids) ? req.body.action_ids : [];
+  const reportIds = Array.isArray(req.body?.report_ids) ? req.body.report_ids : [];
+  const validActionIds = actionIds.filter((id) => mongoose.isValidObjectId(id));
+  const validReportIds = reportIds.filter((id) => mongoose.isValidObjectId(id));
+
+  if (validActionIds.length) {
+    await ModerationAction.updateMany(
+      { _id: { $in: validActionIds }, target_user_id: req.auth.user._id },
+      { $addToSet: { read_by: req.auth.user._id } }
+    );
+  }
+  if (validReportIds.length) {
+    await ModerationReport.updateMany(
+      { _id: { $in: validReportIds }, target_user_id: req.auth.user._id },
+      { $addToSet: { read_by: req.auth.user._id } }
+    );
+  }
+
+  res.json({ message: "Notices marked as read" });
 }));
 
 // ================= PUBLIC CUSTOMER-FACING APIs =================

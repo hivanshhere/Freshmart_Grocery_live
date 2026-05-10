@@ -76,10 +76,78 @@ function showFeedback(message, type) {
     feedbackEl.innerHTML = `<div class="orders-feedback orders-feedback--${type === "error" ? "error" : "success"}">${escapeHtml(message)}</div>`;
 }
 
+function ownerOrdersReadStorageKey(userId) {
+    return `freshMartRead:owner-reviews:${userId || "unknown"}`;
+}
+
+function getOwnerOrdersReadIds(userId) {
+    try {
+        const raw = localStorage.getItem(ownerOrdersReadStorageKey(userId));
+        const ids = JSON.parse(raw || "[]");
+        return new Set(Array.isArray(ids) ? ids.map(String) : []);
+    } catch {
+        return new Set();
+    }
+}
+
+function saveOwnerOrdersReadIds(userId, ids) {
+    try {
+        localStorage.setItem(ownerOrdersReadStorageKey(userId), JSON.stringify([...ids]));
+    } catch {
+    }
+}
+
+function markOwnerOrdersReadOnOpen(container, userId, ids) {
+    const uniqueIds = [...new Set(ids.filter(Boolean).map(String))];
+    if (!container || !uniqueIds.length) return;
+    const details = container.querySelector("details");
+    if (!details) return;
+    details.addEventListener("toggle", () => {
+        if (!details.open) return;
+        const readIds = getOwnerOrdersReadIds(userId);
+        uniqueIds.forEach((id) => readIds.add(id));
+        saveOwnerOrdersReadIds(userId, readIds);
+        markOwnerOrdersReadOnServer(uniqueIds);
+    }, { once: true });
+}
+
+function markOwnerOrdersReadOnServer(ids) {
+    const extractId = (value) => String(value || "").split(":").slice(1).join(":");
+    const isObjectId = (value) => /^[a-f\d]{24}$/i.test(value);
+    const action_ids = ids
+        .filter((id) => id.includes("-action:"))
+        .map(extractId)
+        .filter(isObjectId);
+    const report_ids = ids
+        .filter((id) => id.includes("-report:"))
+        .map(extractId)
+        .filter(isObjectId);
+    if (!action_ids.length && !report_ids.length) return;
+    if (typeof fetch !== "function") return;
+
+    fetch(`${API_BASE}/notices/read`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${ownerToken()}`
+        },
+        body: JSON.stringify({ action_ids, report_ids })
+    }).catch(() => {});
+}
+
+function ownerOrdersActionReadId(action, type) {
+    return `${type}-action:${String(action?.id || action?._id || action?.created_at || action?.notes || "")}`;
+}
+
+function ownerOrdersReportReadId(report, type) {
+    return `${type}-report:${String(report?.id || report?._id || report?.updated_at || report?.created_at || report?.message || report?.admin_notes || "")}`;
+}
+
 function renderOwnerReviewMessages(reports = [], adminActions = [], profile = {}) {
     if (!ownerReviewMessagesEl) return;
 
     const userId = String(profile?.id || localStorage.getItem("userId") || "");
+    const readIds = getOwnerOrdersReadIds(userId);
     const reviewMessages = Array.isArray(reports)
         ? reports.filter((report) => {
             const isForMe = String(report.target_user_id || "") === userId;
@@ -97,6 +165,9 @@ function renderOwnerReviewMessages(reports = [], adminActions = [], profile = {}
             return isForMe && String(report.resolution_action || "").toLowerCase() === "message" && String(report.admin_notes || "").trim();
         })
         : [];
+    const unreadReviewMessages = reviewMessages.filter((report) => !report.read_by_current_user && !readIds.has(ownerOrdersReportReadId(report, "review")));
+    const unreadAdminMessages = adminMessages.filter((action) => !action.read_by_current_user && !readIds.has(ownerOrdersActionReadId(action, "message")));
+    const unreadReviewAdminMessages = reviewAdminMessages.filter((report) => !report.read_by_current_user && !readIds.has(ownerOrdersReportReadId(report, "review-message")));
 
     if (!reviewMessages.length && !adminMessages.length && !reviewAdminMessages.length) {
         ownerReviewMessagesEl.style.display = "none";
@@ -104,13 +175,13 @@ function renderOwnerReviewMessages(reports = [], adminActions = [], profile = {}
         return;
     }
     const summaryLabel = adminMessages.length || reviewAdminMessages.length ? "Messages" : "Reviews";
-    const totalReviewItems = adminMessages.length + reviewMessages.length + reviewAdminMessages.length;
+    const unreadReviewTotal = unreadAdminMessages.length + unreadReviewMessages.length + unreadReviewAdminMessages.length;
 
     ownerReviewMessagesEl.style.display = "block";
     ownerReviewMessagesEl.innerHTML = `
         <details class="owner-review-notice__details">
-            <summary>${summaryLabel} (${totalReviewItems})</summary>
-            <p>Please read the exact messages and positive feedback received for your account.</p>
+            <summary>${summaryLabel}${unreadReviewTotal > 0 ? ` (${unreadReviewTotal})` : ""}</summary>
+            ${unreadReviewTotal > 0 ? `<p>You have ${unreadReviewTotal} unread review/message update${unreadReviewTotal === 1 ? "" : "s"} for your account.</p>` : ""}
             <div class="owner-review-notice__list">
             ${adminMessages.map((action) => `
                 <div class="owner-review-notice__item">
@@ -133,6 +204,11 @@ function renderOwnerReviewMessages(reports = [], adminActions = [], profile = {}
             </div>
         </details>
     `;
+    markOwnerOrdersReadOnOpen(ownerReviewMessagesEl, userId, [
+        ...unreadAdminMessages.map((action) => ownerOrdersActionReadId(action, "message")),
+        ...unreadReviewMessages.map((report) => ownerOrdersReportReadId(report, "review")),
+        ...unreadReviewAdminMessages.map((report) => ownerOrdersReportReadId(report, "review-message"))
+    ]);
 }
 
 async function fetchJson(url, options) {
