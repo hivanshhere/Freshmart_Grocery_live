@@ -4,6 +4,7 @@ const API_BASE = window.AppAuth?.API_BASE || (window.location.origin && /^https?
 
 const complaintsFeedbackEl = document.getElementById("customerComplaintsFeedback");
 const customerAccountUpdatesEl = document.getElementById("customerAccountUpdates");
+const customerReviewUpdatesEl = document.getElementById("customerReviewUpdates");
 const complaintsSummaryEl = document.getElementById("customerComplaintsSummary");
 const complaintsListEl = document.getElementById("customerComplaintsList");
 
@@ -51,6 +52,14 @@ function getAdminStatement(action) {
 }
 
 function renderCustomerAccountUpdates(session) {
+    if (window.CustomerNotices?.renderCustomerAccountNotice) {
+        window.CustomerNotices.renderCustomerAccountNotice(session, {
+            container: customerAccountUpdatesEl,
+            reviewContainer: customerReviewUpdatesEl
+        });
+        return;
+    }
+
     if (!customerAccountUpdatesEl) return;
 
     const profile = session?.user || {};

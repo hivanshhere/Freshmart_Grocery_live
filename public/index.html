@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Local Grocery Store</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="owner.css">
 </head>
 <body>
     <header>
@@ -20,7 +21,8 @@
     </header>
 
     <main class="home-main">
-        <section id="customerAdminMessagePanel" class="admin-message-panel" style="display:none;"></section>
+        <section id="customerAdminMessagePanel" class="owner-notice" style="display:none;"></section>
+        <section id="customerHomeReviewPanel" class="owner-review-notice" style="display:none;"></section>
 
         <section class="hero">
             <h2>Order Groceries From Your Local Store</h2>
@@ -51,6 +53,7 @@
     </footer>
 
     <script src="auth.js"></script>
+    <script src="customer-notices.js"></script>
     <script src="nav.js"></script>
     <script>
         function escapeAdminMessageHtml(value) {
@@ -69,6 +72,13 @@
         function showCustomerAdminMessages(session) {
             const panel = document.getElementById("customerAdminMessagePanel");
             if (!panel || session?.user?.role !== "customer") return;
+            if (window.CustomerNotices?.renderCustomerAccountNotice) {
+                window.CustomerNotices.renderCustomerAccountNotice(session, {
+                    container: panel,
+                    reviewContainer: document.getElementById("customerHomeReviewPanel")
+                });
+                return;
+            }
 
             const directMessages = Array.isArray(session.admin_actions)
                 ? session.admin_actions.filter((action) => String(action.action_type || "").toLowerCase() === "message" && adminMessageText(action))

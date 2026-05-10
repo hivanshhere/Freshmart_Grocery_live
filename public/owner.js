@@ -4,6 +4,7 @@ const API_BASE = window.AppAuth?.API_BASE || (window.location.origin && /^https?
 
 const msgEl = document.getElementById("msg");
 const ownerAccountNoticeEl = document.getElementById("ownerAccountNotice");
+const ownerReviewNoticeEl = document.getElementById("ownerReviewNotice");
 const storeDisplayNameEl = document.getElementById("storeDisplayName");
 const storeDisplayIdEl = document.getElementById("storeDisplayId");
 const createStoreSectionEl = document.getElementById("createStoreSection");
@@ -78,8 +79,6 @@ function formatWarningMessage(warning) {
 }
 
 function showOwnerNotice(profile, moderationReports = [], adminActions = []) {
-    if (!ownerAccountNoticeEl) return;
-
     const status = String(profile?.account_status || localStorage.getItem("accountStatus") || "active").toLowerCase();
     const warningCount = Number(profile?.warning_count ?? localStorage.getItem("warningCount") ?? 0);
     const banReason = String(profile?.ban_reason || localStorage.getItem("banReason") || "").trim();
@@ -116,13 +115,13 @@ function showOwnerNotice(profile, moderationReports = [], adminActions = []) {
             return isForMe && String(report.resolution_action || "").toLowerCase() === "message" && String(report.admin_notes || "").trim();
         })
         : [];
-    const hasUpdates = status === "warned" || warningCount > 0 || Boolean(banReason) || visibleWarnings.length > 0 || visibleMessages.length > 0 || positiveReviews.length > 0 || adminReviewMessages.length > 0;
+    const hasWarningUpdates = status === "warned" || warningCount > 0 || Boolean(banReason) || visibleWarnings.length > 0 || visibleWarningReports.length > 0;
+    const hasReviewUpdates = visibleMessages.length > 0 || positiveReviews.length > 0 || adminReviewMessages.length > 0;
 
-    if (!hasUpdates) {
+    if (ownerAccountNoticeEl && !hasWarningUpdates) {
         ownerAccountNoticeEl.style.display = "none";
         ownerAccountNoticeEl.innerHTML = "";
         ownerAccountNoticeEl.className = "owner-notice";
-        return;
     }
 
     const warningsHtml = warningItems.length
@@ -134,21 +133,6 @@ function showOwnerNotice(profile, moderationReports = [], adminActions = []) {
                         <div class="owner-notice__meta">Sent by ${escapeHtml(warning.admin_name || "Admin")}</div>
                         <span class="owner-notice__label">Warning Message</span>
                         <p>${escapeHtml(formatWarningMessage(warning))}</p>
-                    </div>
-                `).join("")}
-            </div>
-        `
-        : "";
-
-    const messagesHtml = visibleMessages.length
-        ? `
-            <div class="owner-notice__list">
-                ${visibleMessages.map((message) => `
-                    <div class="owner-notice__item">
-                        <h4>Message From Admin</h4>
-                        <div class="owner-notice__meta">Sent by ${escapeHtml(message.admin_name || "Admin")}</div>
-                        <span class="owner-notice__label">Message Statement</span>
-                        <p>${escapeHtml(formatWarningMessage(message))}</p>
                     </div>
                 `).join("")}
             </div>
@@ -171,44 +155,70 @@ function showOwnerNotice(profile, moderationReports = [], adminActions = []) {
             </div>
         `
         : "";
+
+    if (ownerAccountNoticeEl && hasWarningUpdates) {
+        ownerAccountNoticeEl.style.display = "block";
+        ownerAccountNoticeEl.className = "owner-notice owner-notice--error";
+        ownerAccountNoticeEl.innerHTML = `
+            <details class="owner-notice__details" open>
+                <summary>Warning${totalWarningItems > 1 ? ` (${totalWarningItems})` : ""}</summary>
+                ${warningCount > 0 ? `<p>Your store owner account has received ${warningCount} warning${warningCount === 1 ? "" : "s"} from the admin.</p>` : ""}
+                ${(warningCount > 0 && !warningItems.length) ? `<p><strong>Warning:</strong> ${escapeHtml(banReason || "Please review your recent activity and follow the platform rules to avoid stronger action.")}</p>` : ""}
+                ${warningsHtml}
+                ${reportsHtml}
+            </details>
+        `;
+    }
+
+    if (ownerReviewNoticeEl && !hasReviewUpdates) {
+        ownerReviewNoticeEl.style.display = "none";
+        ownerReviewNoticeEl.innerHTML = "";
+        return;
+    }
+
+    const messagesHtml = visibleMessages.length
+        ? visibleMessages.map((message) => `
+            <div class="owner-review-notice__item">
+                <h4>Message From Admin</h4>
+                <div class="owner-review-notice__meta">Sent by ${escapeHtml(message.admin_name || "Admin")}</div>
+                <span class="owner-review-notice__label">Message Statement</span>
+                <p>${escapeHtml(formatWarningMessage(message))}</p>
+            </div>
+        `).join("")
+        : "";
     const reviewsHtml = positiveReviews.length || adminReviewMessages.length
         ? `
-            <div class="owner-notice__list">
                 ${positiveReviews.map((report) => `
-                    <div class="owner-notice__item">
+                    <div class="owner-review-notice__item">
                         <h4>Positive Review ${report.rating ? `(${Number(report.rating)}/5)` : ""}</h4>
-                        <div class="owner-notice__meta">From ${escapeHtml(report.reporter_name || "Customer")}${report.store_name ? ` for ${escapeHtml(report.store_name)}` : ""}</div>
-                        <span class="owner-notice__label">Feedback</span>
+                        <div class="owner-review-notice__meta">From ${escapeHtml(report.reporter_name || "Customer")}${report.store_name ? ` for ${escapeHtml(report.store_name)}` : ""}</div>
+                        <span class="owner-review-notice__label">Feedback</span>
                         <p>${escapeHtml(report.message)}</p>
                     </div>
                 `).join("")}
                 ${adminReviewMessages.map((report) => `
-                    <div class="owner-notice__item">
+                    <div class="owner-review-notice__item">
                         <h4>Admin Message About Review</h4>
-                        <span class="owner-notice__label">Message Statement</span>
+                        <span class="owner-review-notice__label">Message Statement</span>
                         <p>${escapeHtml(report.admin_notes)}</p>
                     </div>
                 `).join("")}
-            </div>
         `
         : "";
-    const summaryLabel = (visibleWarnings.length || visibleWarningReports.length || warningCount > 0 || banReason)
-        ? "Warning"
-        : (visibleMessages.length || adminReviewMessages.length ? "Message" : "Review");
 
-    ownerAccountNoticeEl.style.display = "block";
-    ownerAccountNoticeEl.className = "owner-notice owner-notice--error";
-    ownerAccountNoticeEl.innerHTML = `
-        <details class="owner-notice__details" open>
-            <summary>${summaryLabel}${totalWarningItems > 1 ? ` (${totalWarningItems})` : ""}</summary>
-            ${warningCount > 0 ? `<p>Your store owner account has received ${warningCount} warning${warningCount === 1 ? "" : "s"} from the admin.</p>` : ""}
-            ${(warningCount > 0 && !warningItems.length) ? `<p><strong>Warning:</strong> ${escapeHtml(banReason || "Please review your recent activity and follow the platform rules to avoid stronger action.")}</p>` : ""}
-            ${warningsHtml}
-            ${messagesHtml}
-            ${reportsHtml}
-            ${reviewsHtml}
-        </details>
-    `;
+    if (ownerReviewNoticeEl && hasReviewUpdates) {
+        ownerReviewNoticeEl.style.display = "block";
+        ownerReviewNoticeEl.innerHTML = `
+            <details class="owner-review-notice__details" open>
+                <summary>${positiveReviews.length ? "Review" : "Message"}</summary>
+                <p>Please read the reviews and admin messages for your store owner account.</p>
+                <div class="owner-review-notice__list">
+                    ${messagesHtml}
+                    ${reviewsHtml}
+                </div>
+            </details>
+        `;
+    }
 }
 
 function setMsg(text, type) {

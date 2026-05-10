@@ -4,6 +4,7 @@ const API_BASE = window.AppAuth?.API_BASE || (window.location.origin && /^https?
 
 const customerFeedbackEl = document.getElementById("customerOrdersFeedback");
 const customerAccountUpdatesEl = document.getElementById("customerAccountUpdates");
+const customerReviewUpdatesEl = document.getElementById("customerReviewUpdates");
 const customerSummaryEl = document.getElementById("customerOrdersSummary");
 const customerListEl = document.getElementById("customerOrdersList");
 const customerReportDrafts = {};
@@ -89,7 +90,26 @@ function getAdminStatement(action) {
     return String(action?.notes || action?.admin_notes || action?.message || "").trim();
 }
 
+function formatAdminAction(action) {
+    const normalized = String(action || "").toLowerCase();
+    if (normalized === "warning") return "Warning Issued";
+    if (normalized === "ban") return "Banned";
+    if (normalized === "remove") return "Removed";
+    if (normalized === "dismissed") return "Dismissed";
+    if (normalized === "activate") return "Reactivated";
+    if (normalized === "message") return "Admin Message";
+    return "Under Review";
+}
+
 function renderCustomerAccountUpdates(session) {
+    if (window.CustomerNotices?.renderCustomerAccountNotice) {
+        window.CustomerNotices.renderCustomerAccountNotice(session, {
+            container: customerAccountUpdatesEl,
+            reviewContainer: customerReviewUpdatesEl
+        });
+        return;
+    }
+
     if (!customerAccountUpdatesEl) return;
 
     const profile = session?.user || {};
@@ -99,38 +119,74 @@ function renderCustomerAccountUpdates(session) {
         : (Array.isArray(session?.warning_actions) ? session.warning_actions : []);
     const warningCount = Number(profile.warning_count ?? localStorage.getItem("warningCount") ?? 0);
     const banReason = String(profile.ban_reason || localStorage.getItem("banReason") || "").trim();
-    const directActions = actions.filter((action) => {
-        const type = String(action.action_type || "").toLowerCase();
-        return ["warning", "message"].includes(type) && getAdminStatement(action);
+    const userId = String(profile.id || localStorage.getItem("userId") || "");
+    const visibleWarningReports = reports.filter((report) => {
+        const isForMe = String(report.target_user_id || "") === userId;
+        const action = String(report.resolution_action || "").toLowerCase();
+        const statusValue = String(report.status || "").toLowerCase();
+        return isForMe && action === "warning" && statusValue === "resolved";
     });
+    const warningActions = actions
+        .filter((action) => String(action.action_type || "").toLowerCase() === "warning" && getAdminStatement(action))
+        .slice()
+        .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+    const messageActions = actions.filter((action) => String(action.action_type || "").toLowerCase() === "message" && getAdminStatement(action));
     const receivedReviews = reports.filter((report) => {
-        const isForMe = String(report.target_user_id || "") === String(profile.id || localStorage.getItem("userId") || "");
+        const isForMe = String(report.target_user_id || "") === userId;
         const isReview = String(report.report_type || "").toLowerCase() === "review";
         const rating = Number(report.rating) || 0;
         return isForMe && isReview && rating >= 4 && String(report.message || "").trim();
     });
     const adminReviewMessages = reports.filter((report) => {
-        const isForMe = String(report.target_user_id || "") === String(profile.id || localStorage.getItem("userId") || "");
+        const isForMe = String(report.target_user_id || "") === userId;
         return isForMe && String(report.resolution_action || "").toLowerCase() === "message" && String(report.admin_notes || "").trim();
     });
 
-    if (!directActions.length && !receivedReviews.length && !adminReviewMessages.length && !banReason) {
+    if (!warningActions.length && !messageActions.length && !visibleWarningReports.length && !receivedReviews.length && !adminReviewMessages.length && warningCount <= 0 && !banReason) {
         customerAccountUpdatesEl.style.display = "none";
         customerAccountUpdatesEl.innerHTML = "";
         return;
     }
 
-    const actionHtml = directActions.map((action) => {
-        const type = String(action.action_type || "").toLowerCase() === "warning" ? "Warning" : "Admin Message";
+    const totalWarningItems = Math.max(warningCount, warningActions.length);
+    const warningHtml = warningActions.length
+        ? `<div class="account-review__list">
+            ${warningActions.map((action, index) => `
+                <div class="account-review__item">
+                    <h4>Warning ${index + 1}${totalWarningItems > 1 ? ` of ${totalWarningItems}` : ""} From Admin</h4>
+                    <div class="account-review__meta">Sent by ${escapeHtml(action.admin_name || "Admin")}</div>
+                    <span>Warning Message</span>
+                    <strong>${escapeHtml(getAdminStatement(action))}</strong>
+                </div>
+            `).join("")}
+        </div>`
+        : "";
+    const fallbackWarningHtml = !warningActions.length && (warningCount > 0 || banReason)
+        ? `<div class="account-review__list"><div class="account-review__item"><h4>Warning From Admin</h4><span>Warning Message</span><strong>${escapeHtml(banReason || "Please review your recent activity and follow the platform rules to avoid stronger action.")}</strong></div></div>`
+        : "";
+    const messageHtml = messageActions.map((action) => {
         return `
             <div class="account-review__item">
-                <span>${type === "Admin Message" ? "Message Statement From" : `${type} From`} ${escapeHtml(action.admin_name || "Admin")}</span>
+                <h4>Message From Admin</h4>
+                <div class="account-review__meta">Sent by ${escapeHtml(action.admin_name || "Admin")}</div>
+                <span>Message Statement</span>
                 <strong>${escapeHtml(getAdminStatement(action))}</strong>
             </div>
         `;
     }).join("");
-    const fallbackWarningHtml = !directActions.some((action) => String(action.action_type || "").toLowerCase() === "warning") && (warningCount > 0 || banReason)
-        ? `<div class="account-review__item"><span>Warning Message</span><strong>${escapeHtml(banReason || "Please review your recent activity and follow the platform rules to avoid stronger action.")}</strong></div>`
+    const reportsHtml = visibleWarningReports.length
+        ? `<div class="account-review__list">
+            ${visibleWarningReports.map((report) => `
+                <div class="account-review__item">
+                    <h4>${escapeHtml(report.report_type || "Complaint")} on Order #${Number(report.order_id) || 0} - ${escapeHtml(formatAdminAction(report.resolution_action || report.status))}</h4>
+                    <div class="account-review__meta">Reported by ${escapeHtml(report.reporter_name || "Store Owner")} (${escapeHtml(report.reporter_role || "owner")})${report.store_name ? ` for ${escapeHtml(report.store_name)}` : ""}</div>
+                    <span>Reported Issue</span>
+                    <strong>${escapeHtml(report.message || "No details provided.")}</strong>
+                    <span>Admin Note</span>
+                    <strong>${escapeHtml(report.admin_notes || "No admin note added.")}</strong>
+                </div>
+            `).join("")}
+        </div>`
         : "";
     const reviewHtml = receivedReviews.map((report) => `
         <div class="account-review__item">
@@ -144,15 +200,18 @@ function renderCustomerAccountUpdates(session) {
             <strong>${escapeHtml(report.admin_notes)}</strong>
         </div>
     `).join("");
-    const hasWarning = directActions.some((action) => String(action.action_type || "").toLowerCase() === "warning") || warningCount > 0 || Boolean(banReason);
-    const summaryLabel = hasWarning ? "Warning" : (directActions.length || adminReviewMessages.length ? "Message" : "Review");
+    const hasWarning = warningActions.length || visibleWarningReports.length || warningCount > 0 || Boolean(banReason);
+    const summaryLabel = hasWarning ? "Warning" : (messageActions.length || adminReviewMessages.length ? "Message" : "Review");
 
     customerAccountUpdatesEl.style.display = "block";
     customerAccountUpdatesEl.innerHTML = `
         <details class="account-review__details" open>
-            <summary>${summaryLabel}</summary>
-            ${actionHtml}
+            <summary>${summaryLabel}${totalWarningItems > 1 ? ` (${totalWarningItems})` : ""}</summary>
+            ${warningCount > 0 ? `<p>Your customer account has received ${warningCount} warning${warningCount === 1 ? "" : "s"} from the admin.</p>` : ""}
+            ${warningHtml}
             ${fallbackWarningHtml}
+            ${messageHtml}
+            ${reportsHtml}
             ${reviewHtml}
             ${adminMessageHtml}
         </details>

@@ -107,27 +107,29 @@ function renderOwnerReviewMessages(reports = [], adminActions = [], profile = {}
 
     ownerReviewMessagesEl.style.display = "block";
     ownerReviewMessagesEl.innerHTML = `
-        <details class="account-review__details" open>
+        <details class="owner-review-notice__details" open>
             <summary>${summaryLabel}</summary>
             <p>Please read the exact messages and positive feedback received for your account.</p>
+            <div class="owner-review-notice__list">
             ${adminMessages.map((action) => `
-                <div class="account-review__item">
-                    <span>Message Statement From ${escapeHtml(action.admin_name || "Admin")}</span>
-                    <strong>${escapeHtml(action.notes)}</strong>
+                <div class="owner-review-notice__item">
+                    <span class="owner-review-notice__label">Message Statement From ${escapeHtml(action.admin_name || "Admin")}</span>
+                    <p>${escapeHtml(action.notes)}</p>
                 </div>
             `).join("")}
             ${reviewMessages.map((report) => `
-                <div class="account-review__item">
-                    <span>Positive Review From ${escapeHtml(report.reporter_name || "Customer")} ${report.rating ? `(${Number(report.rating)}/5)` : ""}</span>
-                    <strong>${escapeHtml(report.message)}</strong>
+                <div class="owner-review-notice__item">
+                    <span class="owner-review-notice__label">Positive Review From ${escapeHtml(report.reporter_name || "Customer")} ${report.rating ? `(${Number(report.rating)}/5)` : ""}</span>
+                    <p>${escapeHtml(report.message)}</p>
                 </div>
             `).join("")}
             ${reviewAdminMessages.map((report) => `
-                <div class="account-review__item">
-                    <span>Message Statement From Admin</span>
-                    <strong>${escapeHtml(report.admin_notes)}</strong>
+                <div class="owner-review-notice__item">
+                    <span class="owner-review-notice__label">Message Statement From Admin</span>
+                    <p>${escapeHtml(report.admin_notes)}</p>
                 </div>
             `).join("")}
+            </div>
         </details>
     `;
 }

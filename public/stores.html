@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nearby Grocery Stores</title>
     <link rel="stylesheet" href="storestyle.css">
+    <link rel="stylesheet" href="owner.css">
 </head>
 <body>
 
@@ -29,8 +30,8 @@
         <p>Browse nearby stores, compare delivery and pickup availability, and open the one you want to shop from.</p>
     </section>
 
-    <section id="customerAccountWarning" class="store-account-warning" style="display:none;"></section>
-    <section id="customerReviewMessages" class="store-account-review" style="display:none;"></section>
+    <section id="customerAccountNotice" class="owner-notice" style="display:none;"></section>
+    <section id="customerReviewNotice" class="owner-review-notice" style="display:none;"></section>
 
     <section class="stores-status" id="locationStatus">
         Finding all the stores near you...
@@ -42,6 +43,7 @@
 </main>
 
 <script src="auth.js"></script>
+<script src="customer-notices.js"></script>
 <script>
 
 // Login check: only logged-in users can access stores
@@ -51,8 +53,10 @@
         expectedRole: "customer",
         afterLogin: "stores.html"
     });
-    showCustomerWarning(session?.user, session?.admin_actions || session?.warning_actions || []);
-    showCustomerReviewMessages(session?.user, session?.moderation_reports || [], session?.admin_actions || []);
+    window.CustomerNotices?.renderCustomerAccountNotice?.(session, {
+        container: "customerAccountNotice",
+        reviewContainer: "customerReviewNotice"
+    });
 })();
 
 function escapeWarningHtml(value) {

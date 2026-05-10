@@ -105,6 +105,22 @@ text-transform:uppercase;
 color:rgba(140,36,25,0.72);
 }
 
+.account-review__item h4{
+margin:0 0 8px;
+font-size:20px;
+color:#8c2419;
+}
+
+.account-review__meta{
+font-size:15px;
+font-weight:700;
+opacity:0.86;
+}
+
+.account-review__item strong + span{
+margin-top:14px;
+}
+
 .account-review__item strong{
 display:block;
 font-size:18px;

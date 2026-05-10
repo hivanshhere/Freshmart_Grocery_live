@@ -100,6 +100,75 @@ font-size:18px;
 font-weight:500;
 }
 
+.owner-review-notice{
+margin:8px auto 26px;
+padding:24px 26px;
+border-radius:24px;
+border:1px solid rgba(31,122,69,0.18);
+background:linear-gradient(135deg, #e8f8ee 0%, #f4fff7 100%);
+box-shadow:0 16px 34px rgba(31,122,69,0.08);
+color:#1f7a45;
+}
+
+.owner-review-notice__details summary{
+cursor:pointer;
+font-size:28px;
+line-height:1.2;
+font-weight:800;
+color:inherit;
+}
+
+.owner-review-notice__details summary::marker{
+color:inherit;
+}
+
+.owner-review-notice p{
+margin:12px 0 0;
+line-height:1.6;
+font-size:19px;
+font-weight:600;
+}
+
+.owner-review-notice__list{
+display:grid;
+gap:14px;
+margin-top:24px;
+}
+
+.owner-review-notice__item{
+padding:18px 20px;
+border-radius:18px;
+border:1px solid rgba(31,122,69,0.14);
+background:rgba(255,255,255,0.78);
+}
+
+.owner-review-notice__item h4{
+margin:0 0 8px;
+font-size:20px;
+color:inherit;
+}
+
+.owner-review-notice__meta{
+font-size:15px;
+font-weight:700;
+opacity:0.86;
+}
+
+.owner-review-notice__label{
+display:block;
+margin-top:10px;
+font-size:14px;
+font-weight:800;
+letter-spacing:0.08em;
+text-transform:uppercase;
+opacity:0.72;
+}
+
+.owner-review-notice__item p{
+font-size:18px;
+font-weight:500;
+}
+
 .dashboard-grid{
 display:grid;
 grid-template-columns:repeat(2, minmax(0, 1fr));

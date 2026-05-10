@@ -610,7 +610,7 @@ app.get("/auth/me", requireAuth, asyncHandler(async (req, res) => {
     .limit(50);
   const adminActions = await ModerationAction.find({
     target_user_id: req.auth.user._id,
-    action_type: { $in: ["warning", "message"] }
+    action_type: { $in: ["warning", "message", "activate", "banned", "removed"] }
   }).sort({ createdAt: -1 });
   const reporterIds = [...new Set(reports.map((report) => String(report.reporter_id || "")).filter(Boolean))];
   const targetIds = [...new Set(reports.map((report) => String(report.target_user_id || "")).filter(Boolean))];
