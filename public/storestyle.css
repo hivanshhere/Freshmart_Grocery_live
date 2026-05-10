@@ -70,6 +70,8 @@ font-weight:700;
 .stores-page > .owner-notice{
 max-width:1100px;
 box-sizing:border-box;
+padding:12px 22px;
+margin:6px auto 18px;
 }
 
 .stores-page > .owner-review-notice{
@@ -77,10 +79,15 @@ max-width:1100px;
 box-sizing:border-box;
 }
 
+.stores-page .owner-notice__details summary{
+font-size:22px;
+line-height:1.1;
+}
+
 .store-account-warning{
 max-width:1100px;
 margin:6px auto 18px;
-padding:24px 26px;
+padding:12px 20px;
 box-sizing:border-box;
 border-radius:24px;
 border:1px solid rgba(185,73,59,0.22);
@@ -97,8 +104,8 @@ color:#8c2419;
 
 .store-account-warning__details summary{
 cursor:pointer;
-font-size:28px;
-line-height:1.2;
+font-size:20px;
+line-height:1.1;
 font-weight:800;
 color:#8c2419;
 }
